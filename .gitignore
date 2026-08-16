@@ -446,3 +446,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+moulinette
+datasets_public
+vllm-0.10.1
