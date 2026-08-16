@@ -1,1 +1,2 @@
-__all__ = []
+import Chunker
+__all__ = ["Chunker"]
