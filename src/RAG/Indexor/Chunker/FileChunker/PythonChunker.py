@@ -1,4 +1,5 @@
 from FileChunker import FileChunker
+from ..Tokenizer import PythonTokenizer
 from pathlib import Path
 from Chunk import Chunk
 from typing import List
@@ -6,6 +7,12 @@ import ast
 
 
 class PythonChunker(FileChunker):
+    """
+    Chunker Class for the Python .py files
+    """
+
+    def __init__(self) -> None:
+        self.__tokenizer = PythonTokenizer()
 
     def chunk(self, path: Path, chunk_size: int) -> dict:
         """
