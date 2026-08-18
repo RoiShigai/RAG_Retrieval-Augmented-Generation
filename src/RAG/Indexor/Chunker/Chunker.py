@@ -1,4 +1,5 @@
-from abc import abstractmethod, ABC
+from Tokenizer import PythonTokenizer
+from pathlib import Path
 
 
 class ChunkError(Exception):
@@ -6,17 +7,28 @@ class ChunkError(Exception):
         self.super(msg)
 
 
-class Chunker(ABC):
+class Chunker:
 
-    @abstractmethod
-    def chunk_file(self, file_data: str | dict) -> dict:
-        ...
+    def __init__(self, chunk_size: int) -> None:
+        self.tokenizer: dict = {
+            ".py": PythonTokenizer()
+        }
+        self.__max_chunk_size: int = chunk_size
 
-    def __set_chunk_size(self, chunk_size: int) -> None:
-        if chunk_size and chunk_size > 0 and chunk_size <= 2000:
-            self.__chunk_size = chunk_size
-        else:
-            raise ChunkError(
-                f"ChunkSizeError: Invalid Chunk size '{chunk_size}'" \
-                f"Chunk size must be >0 and <=2000."
-            )
+    def chunk(self, path: Path) -> dict:
+        """
+        Return list of chunks from the given file.
+
+        This function will automatically choose the right Tokenizer
+            depending of the file suffix. Raise an Error if a file
+            cannot be handle by the actual Tokenizer implementation.
+
+        Parameters:
+            path: The path object of the file to tokenize.
+
+        Return:
+            List[Chunk]: Return the list of chunks.
+        """
+        return self.tokenizer[path.suffix].chunk(
+            path, self.__max_chunk_size
+        )
