@@ -1,4 +1,4 @@
-from Tokenizer import PythonTokenizer
+from .FileChunker import PythonChunker
 from pathlib import Path
 
 
@@ -11,7 +11,7 @@ class Chunker:
 
     def __init__(self, chunk_size: int) -> None:
         self.tokenizer: dict = {
-            ".py": PythonTokenizer()
+            ".py": PythonChunker()
         }
         self.__max_chunk_size: int = chunk_size
 

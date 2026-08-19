@@ -20,7 +20,7 @@ class Indexor:
         using reverse key into "project/data/processed"
     """
 
-    SUPPORTED_EXTENSION = {".py", ".md"}
+    SUPPORTED_EXTENSION: set = {".py", ".md"}
 
     def __init__(self, chunk_size: int = MAX_CHUNK_SIZE) -> None:
         try:
@@ -52,4 +52,5 @@ class Indexor:
                 self._index_chunks(chunk)
 
     def __index_chunks(chunk: Chunk) -> None:
+        print("[RAG LOG] - Indexing the chunks...")
         pass
