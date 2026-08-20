@@ -1,7 +1,7 @@
 from FileChunker import FileChunker
 from ..Tokenizer import PythonTokenizer
 from pathlib import Path
-from Chunk import Chunk
+from Chunk import Chunk, IdGenerator
 from typing import List
 import ast
 
@@ -18,14 +18,16 @@ class PythonChunker(FileChunker):
         making the retriavable chances harder.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, chunk_size: int, id_generator: IdGenerator) -> None:
         """
-        Init method of the PythonFileCHunker class, 
+        Init method of the PythonFileCHunker class,
             This method create an instance of the PythonTokenizer
         """
+        self.__id_generator = id_generator
+        self.__max_chunk_size = chunk_size
         self.__tokenizer = PythonTokenizer()
 
-    def chunk(self, path: Path, chunk_size: int) -> List[Chunk]:
+    def chunk(self, path: Path) -> List[Chunk]:
         """
         Chunking method for Python source file.
 
@@ -40,6 +42,7 @@ class PythonChunker(FileChunker):
         Parameters:
             path: Path | the path object of the corresponding python file.
             chunk_size: int | the max size of a chunk
+
         Return:
             List[Chunk]
         """

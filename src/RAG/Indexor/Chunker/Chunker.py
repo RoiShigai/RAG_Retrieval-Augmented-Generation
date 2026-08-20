@@ -1,4 +1,5 @@
 from .FileChunker import PythonChunker
+from .Chunk import IdGenerator
 from pathlib import Path
 
 
@@ -10,8 +11,9 @@ class ChunkError(Exception):
 class Chunker:
 
     def __init__(self, chunk_size: int) -> None:
+        id_generator: IdGenerator = IdGenerator()
         self.tokenizer: dict = {
-            ".py": PythonChunker()
+            ".py": PythonChunker(chunk_size, id_generator)
         }
         self.__max_chunk_size: int = chunk_size
 

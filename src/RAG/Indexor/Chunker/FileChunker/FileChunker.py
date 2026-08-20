@@ -7,5 +7,5 @@ from typing import List
 class FileChunker(ABC):
 
     @abstractmethod
-    def chunk(self, path: Path, chunk_size: int) -> List[Chunk]:
+    def chunk(self, path: Path) -> List[Chunk]:
         pass
