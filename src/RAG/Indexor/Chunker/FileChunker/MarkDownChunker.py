@@ -1,5 +1,5 @@
-from FileChunker import FileChunker
-import Path
+from .FileChunker import FileChunker
+from pathlib import Path
 
 
 class MarkDownChunker(FileChunker):

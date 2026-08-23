@@ -1,5 +1,6 @@
-from Chunker import Chunker, Chunk
-import Path
+from Chunker import PythonChunker, MarkDownChunker, IdGenerator, Chunk
+from typing import List
+from pathlib import Path
 
 MAX_CHUNK_SIZE = 500
 
@@ -20,11 +21,16 @@ class Indexor:
         using reverse key into "project/data/processed"
     """
 
-    SUPPORTED_EXTENSION: set = {".py", ".md"}
+    #SUPPORTED_EXTENSION: set = {".py", ".md"}
+    SUPPORTED_EXTENSION: set = {".py"}
 
     def __init__(self, chunk_size: int = MAX_CHUNK_SIZE) -> None:
         try:
-            self.__chunker = Chunker(chunk_size)
+            self.__id_generator = IdGenerator()
+            self.__chunker = {
+                ".py": PythonChunker(chunk_size, self.__id_generator),
+                ".md": MarkDownChunker(chunk_size, self.__id_generator)
+            }
         except (Exception) as e:
             print(f"Catch: {e}")
 
@@ -42,15 +48,24 @@ class Indexor:
             This function return None but will display logs
                 about the indexing process
         """
+        chunks: List[Chunk] = []
         for path in root_file.rglob("*"):
             if not path.is_file():
                 continue
             if path.suffix not in self.SUPPORTED_EXTENSION:
                 continue
-            chunks = self.chunker.chunk(path)
+            print(f"[DEBUG]: current file {path}")
+            chunks = self.__chunker[path.suffix].chunk(path)
             for chunk in chunks:
-                self._index_chunks(chunk)
+                chunk.debug_chunk()
+            #print(f"[DEBUG]: {chunks}")
+            self.__index_chunks(chunks)
 
-    def __index_chunks(chunk: Chunk) -> None:
+    def __index_chunks(self, chunks: List[Chunk]) -> None:
         print("[RAG LOG] - Indexing the chunks...")
         pass
+
+
+if __name__ == "__main__":
+    indexor = Indexor()
+    indexor.index(Path("vllm-0.10.1"))

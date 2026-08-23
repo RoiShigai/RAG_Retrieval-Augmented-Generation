@@ -1,7 +1,7 @@
-from FileChunker import FileChunker
+from .FileChunker import FileChunker
 from ..Tokenizer import PythonTokenizer
 from pathlib import Path
-from Chunk import Chunk, IdGenerator
+from ..Chunk import Chunk, IdGenerator, ChunkType
 from typing import List, Tuple
 import ast
 
@@ -83,11 +83,11 @@ class PythonChunker(FileChunker):
             return [
                 Chunk(
                     id=self.__id_generator.next(),
-                    path=path,
+                    file_path=path,
                     start=start,
                     end=end,
                     tokens=tokens,
-                    kind="function",
+                    chunk_type=ChunkType.PYTHON_FUNCTION,
                     name=node.name,
                     parent_id=parent_id
                 )
@@ -109,11 +109,11 @@ class PythonChunker(FileChunker):
             return [
                 Chunk(
                     id=self.__id_generator.next(),
-                    path=path,
+                    file_path=path,
                     start=start,
                     end=end,
                     tokens=self.__tokenizer.tokenize(source[start:end]),
-                    kind="function",
+                    chunk_type=ChunkType.PYTHON_FUNCTION,
                     name=node.name,
                     parent_id=parent_id
                 )
@@ -139,13 +139,13 @@ class PythonChunker(FileChunker):
             chunks.append(
                 Chunk(
                     id=self.__id_generator.next(),
-                    path=path,
+                    file_path=path,
                     start=current_start,
                     end=current_end,
                     tokens=self.__tokenizer.tokenize(
                         source[current_start:current_end]
                     ),
-                    kind="function",
+                    chunk_type=ChunkType.PYTHON_FUNCTION,
                     name=node.name,
                     parent_id=parent_id
                 )
@@ -157,13 +157,13 @@ class PythonChunker(FileChunker):
             chunks.append(
                 Chunk(
                     id=self.__id_generator.next(),
-                    path=path,
+                    file_path=path,
                     start=current_start,
                     end=current_end,
                     tokens=self.__tokenizer.tokenize(
                         source[current_start:current_end]
                     ),
-                    kind="function",
+                    chunk_type=ChunkType.PYTHON_FUNCTION,
                     name=node.name,
                     parent_id=parent_id
                 )
@@ -172,11 +172,12 @@ class PythonChunker(FileChunker):
 
     def __chunk_class(
             self,
-            path: Path,
+            file_path: Path,
             source: str,
-            offset: List[int],
             node: ast.ClassDef,
+            offset: List[int],
             parent_id: int | None = None) -> List[Chunk]:
+        print(f"node: {node}")
         start, end = self.__node_range(offset, node)
         tokens = self.__tokenizer.tokenize(source[start:end])
 
@@ -184,16 +185,15 @@ class PythonChunker(FileChunker):
             return [
                 Chunk(
                     id=self.__id_generator.next(),
-                    path=path,
+                    file_path=file_path,
                     start=start,
                     end=end,
                     tokens=self.__tokenizer.tokenize(source[start:end]),
-                    kind="class",
-                    name=node.name,
+                    chunk_type=ChunkType.PYTHON_CLASS,
                     parent_id=parent_id
                 )
             ]
-        return self.__split_class(path, source, offset, node, parent_id)
+        return self.__split_class(file_path, source, offset, node, parent_id)
 
     def __split_class(
             self,
@@ -226,13 +226,13 @@ class PythonChunker(FileChunker):
             chunks.append(
                 Chunk(
                     id=self.__id_generator.next(),
-                    path=path,
+                    file_path=path,
                     start=current_start,
                     end=current_end,
                     tokens=self.__tokenizer.tokenize(
                         source[current_start:current_end]
                     ),
-                    kind="class_part",
+                    chunk_type=ChunkType.PYTHON_CLASS_PART,
                     name=node.name,
                     parent_id=parent_id
                 )
@@ -244,13 +244,13 @@ class PythonChunker(FileChunker):
             chunks.append(
                 Chunk(
                     id=self.__id_generator.next(),
-                    path=path,
+                    file_path=path,
                     start=current_start,
                     end=current_end,
                     tokens=self.__tokenizer.tokenize(
                         source[current_start:current_end]
                     ),
-                    kind="class_part",
+                    chunk_type=ChunkType.PYTHON_CLASS_PART,
                     name=node.name,
                     parent_id=parent_id
                 )
@@ -318,7 +318,7 @@ class PythonChunker(FileChunker):
         """ Return the char position of the beginning statement """
         return offsets[line - 1] + column
 
-    def __node_range(self, node: ast.AST, offset: List[int]) -> Tuple[int, int]:
+    def __node_range(self, offset: List[int], node: ast.AST) -> Tuple[int, int]:
         """ Return the start and end char position of the node """
         start = self.__get_offset(offset, node.lineno, node.col_offset)
         end = self.__get_offset(offset, node.end_lineno, node.end_col_offset)

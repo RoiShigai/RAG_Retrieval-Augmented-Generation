@@ -32,7 +32,7 @@ class PythonTokenizer:
         result: List[str] = []
 
         for tokens in token.split("."):
-            result.append(token)
+            result.append(tokens)
         return result
 
     def tokenize(self, source: str) -> List[str]:

@@ -5,12 +5,13 @@ from typing import List
 
 
 class ChunkType(Enum):
-    PYTHON_FUNCTION = "python_function"
-    PYTHON_CLASS = "python_class"
-    PYTHON_DOCSTRING = "python_docstring"
-    PYTHON_MODULE = "python_module"
+    PYTHON_FUNCTION = "function"
+    PYTHON_CLASS = "class"
+    PYTHON_CLASS_PART = "class_part"
+    PYTHON_DOCSTRING = "docstring"
+    PYTHON_MODULE = "module"
 
-    MARKDOWN_SECTION = "markdown section"
+    MARKDOWN_SECTION = "markdown_section"
     MARKDOWN_CODE_BLOCK = "markdown_code_block"
 
 
@@ -44,3 +45,6 @@ class Chunk:
     chunk_type: ChunkType
     parent_id: int | None
     tokens: List[str]
+
+    def debug_chunk(self) -> None:
+        print(f"{self.id}, {self.file_path}, {self.start}, {self.end}, {self.chunk_type}, {self.parent_id}")
