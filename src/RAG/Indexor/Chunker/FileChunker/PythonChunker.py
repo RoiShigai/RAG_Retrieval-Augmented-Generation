@@ -64,7 +64,6 @@ class PythonChunker(FileChunker):
                         path, source, node, offset, None
                     )
                 )
-                
         return chunks
 
     def __chunk_function(
@@ -143,7 +142,9 @@ class PythonChunker(FileChunker):
                     path=path,
                     start=current_start,
                     end=current_end,
-                    tokens=self.__tokenizer.tokenize(source[current_start:current_end]),
+                    tokens=self.__tokenizer.tokenize(
+                        source[current_start:current_end]
+                    ),
                     kind="function",
                     name=node.name,
                     parent_id=parent_id
@@ -236,7 +237,6 @@ class PythonChunker(FileChunker):
                     parent_id=parent_id
                 )
             )
-            
             current_start = child_start
             current_end = child_end
 
