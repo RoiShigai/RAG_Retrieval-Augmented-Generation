@@ -3,7 +3,6 @@ from ..Chunk import Chunk, IdGenerator, ChunkType
 from ..Tokenizer import MarkdownSection, MarkDownTokenizer
 from pathlib import Path
 from typing import List
-import re
 
 
 class MarkDownChunker(FileChunker):
@@ -15,13 +14,14 @@ class MarkDownChunker(FileChunker):
         """
         self.__id_generator = id_generator
         self.__max_chunk_size = chunk_size
+        self.__tokenizer = MarkDownTokenizer()
 
     def chunk(self, path: Path) -> List[Chunk]:
         """
         Return a list of chunks from a MarkDown file
         """
         source = path.read_text(encoding="utf-8")
-        sections = self.parse(source)
+        sections = self.__tokenizer.parse(source)
         chunks: List[Chunk] = []
 
         for section in sections:
@@ -99,7 +99,7 @@ class MarkDownChunker(FileChunker):
         """
         Reconstruct the metadata path for child chunks.
 
-        This function is used to keep the semantic between child chunk 
+        This function is used to keep the semantic between child chunk
             so we can determine to which section the child chunk attach to
         """
         path: List[str] = []
@@ -118,8 +118,8 @@ class MarkDownChunker(FileChunker):
             section: MarkdownSection,
             source: str,
             chunk_type: ChunkType,
-            parent_id: int | None = None,
-            tokens: List[str]) -> Chunk:
+            tokens: List[str],
+            parent_id: int | None = None) -> Chunk:
         """
         Return a chunk with the actual data
         """
