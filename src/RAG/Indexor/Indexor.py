@@ -22,7 +22,6 @@ class Indexor:
     """
 
     SUPPORTED_EXTENSION: set = {".py", ".md"}
-    #SUPPORTED_EXTENSION: set = {".py"}
 
     def __init__(self, chunk_size: int = MAX_CHUNK_SIZE) -> None:
         try:

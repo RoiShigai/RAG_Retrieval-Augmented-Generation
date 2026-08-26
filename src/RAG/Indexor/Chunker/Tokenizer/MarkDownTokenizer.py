@@ -19,12 +19,14 @@ class MarkDownTokenizer:
     __FENCE_RE = re.compile(r"^[ \t]*(```+|~~~+)")
 
     def tokenize(self, source: str) -> List[str]:
+        source = self.__clean_markdown(source)
+
         return [
             token.lower()
             for token in self.__TOKEN_PATTERN.findall(source)
         ]
 
-    def parse(self, source: str) -> List[str]:
+    def parse(self, source: str) -> List[MarkdownSection]:
         """
         Return a list of string from a given markdown file, the parsing
             try to respection each section from the file.
@@ -84,3 +86,41 @@ class MarkDownTokenizer:
                     section.end = next_section.start
                     break
         return sections
+
+    def _clean_markdown(self, source: str) -> str:
+        """
+        Clean a Markdown content from Markdown vocabulary
+        """
+        source = re.sub(
+            r"^[ \t]*(```+|~~~+)[^\n]*$",
+            "",
+            source,
+            flags=re.MULTILINE,
+        )
+        source = re.sub(
+            r"^[ \t]{0,3}#{1,6}[ \t]+",
+            "",
+            source,
+            flags=re.MULTILINE,
+        )
+        source = re.sub(
+            r"\[([^\]]+)\]\([^)]+\)",
+            r"\1",
+            source,
+        )
+        source = re.sub(
+            r"!\[([^\]]*)\]\([^)]+\)",
+            r"\1",
+            source,
+        )
+        source = re.sub(
+            r"`([^`]+)`",
+            r"\1",
+            source,
+        )
+        source = re.sub(
+            r"\*\*|\*|__|_",
+            " ",
+            source,
+        )
+        return source

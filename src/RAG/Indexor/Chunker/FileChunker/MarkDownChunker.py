@@ -39,6 +39,9 @@ class MarkDownChunker(FileChunker):
             path: Path,
             source: str,
             section: MarkdownSection) -> List[Chunk]:
+        """
+        Convert a MarkDownSection object into a Chunk
+        """
         content = source[section.start:section.end]
         tokens = self.__tokenizer.tokenize(content)
 
