@@ -21,52 +21,6 @@ class PythonTokenizer:
         self.__tokens: List[PythonToken] = []
         self.__token_starts: List[int] = []
 
-    def __is_camel_case(self, s: str) -> bool:
-        """ Check if the given string format is CamelCase or not """
-        return s != s.lower() and s != s.upper() and "_" not in s
-
-    def __tokenize_dash(self, token: str) -> List[str]:
-        """ Split token by dash """
-        result: List[str] = []
-
-        for tokens in token.split("-"):
-            result.append(tokens)
-        return result
-
-    def __tokenize_snake_case(self, token: str) -> List[str]:
-        """ Split token by underscore """
-        result: List[str] = []
-
-        for tokens in token.split("_"):
-            result.append(tokens)
-        return result
-
-    def __tokenize_dot(self, token: str) -> List[str]:
-        """ Split token by dot """
-        result: List[str] = []
-
-        for tokens in token.split("."):
-            result.append(tokens)
-        return result
-
-    def tokens_for_range(
-            self,
-            start: int,
-            end: int) -> List[str]:
-        """
-        Return the token corresponding to a range of characters in a file
-        """
-        index = bisect_left(self.__token_starts, start)
-        result = []
-
-        while index < len(self.__tokens):
-            token = self.__tokens[index]
-            if token.end > end:
-                break
-            result.append(token.value)
-            index += 1
-        return result
-
     def tokenize_file(self, source: str, offsets: List[int]) -> None:
         """
         Return a List of PythonTokens after tokenizing the whole given file
@@ -184,6 +138,52 @@ class PythonTokenizer:
             print("TOkenize byte: OK")
         except Exception as e:
             print("Tokenize Bytes error:", repr(e))
+        return result
+
+    def __is_camel_case(self, s: str) -> bool:
+        """ Check if the given string format is CamelCase or not """
+        return s != s.lower() and s != s.upper() and "_" not in s
+
+    def __tokenize_dash(self, token: str) -> List[str]:
+        """ Split token by dash """
+        result: List[str] = []
+
+        for tokens in token.split("-"):
+            result.append(tokens)
+        return result
+
+    def __tokenize_snake_case(self, token: str) -> List[str]:
+        """ Split token by underscore """
+        result: List[str] = []
+
+        for tokens in token.split("_"):
+            result.append(tokens)
+        return result
+
+    def __tokenize_dot(self, token: str) -> List[str]:
+        """ Split token by dot """
+        result: List[str] = []
+
+        for tokens in token.split("."):
+            result.append(tokens)
+        return result
+
+    def tokens_for_range(
+            self,
+            start: int,
+            end: int) -> List[str]:
+        """
+        Return the token corresponding to a range of characters in a file
+        """
+        index = bisect_left(self.__token_starts, start)
+        result = []
+
+        while index < len(self.__tokens):
+            token = self.__tokens[index]
+            if token.end > end:
+                break
+            result.append(token.value)
+            index += 1
         return result
 
     def _tokenize_identifier(self, identifier: str) -> List[str]:

@@ -1,5 +1,6 @@
 from .FileChunker import FileChunker
 from ..Chunk import Chunk, IdGenerator, ChunkType
+from ..Tokenizer import MarkdownSection, MarkDownTokenizer
 from pathlib import Path
 from typing import List
 import re
@@ -63,9 +64,9 @@ class MarkDownChunker(FileChunker):
         """
         chunks: List[Chunk] = []
 
-        content_start = section.start
+        content_start: int = section.start
         for child in section.children:
-            candidate = source[content_start:child.end]
+            candidate: str = source[content_start:child.end]
 
             tokens = self.__tokenizer.tokenize(candidate)
             if len(tokens) <= self.__max_chunk_size:
@@ -107,3 +108,24 @@ class MarkDownChunker(FileChunker):
         path.reverse()
 
         return path
+
+    def __create_chunk(
+            self,
+            path: Path,
+            section: MarkdownSection,
+            source: str,
+            chunk_type: ChunkType,
+            parent_id: int | None = None,
+            tokens: List[str]) -> Chunk:
+        """
+        Return a chunk with the actual data
+        """
+        return Chunk(
+            id=self.__id_generator.next(),
+            file_path=path,
+            start=section.start,
+            end=section.end,
+            chunk_type=type,
+            parent_id=parent_id,
+            tokens=tokens
+        )

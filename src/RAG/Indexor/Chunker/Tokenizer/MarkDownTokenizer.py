@@ -18,6 +18,12 @@ class MarkDownTokenizer:
     __HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$")
     __FENCE_RE = re.compile(r"^[ \t]*(```+|~~~+)")
 
+    def tokenize(self, source: str) -> List[str]:
+        return [
+            token.lower()
+            for token in self.__TOKEN_PATTERN.findall(source)
+        ]
+
     def parse(self, source: str) -> List[str]:
         """
         Return a list of string from a given markdown file, the parsing
