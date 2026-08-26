@@ -21,8 +21,8 @@ class Indexor:
         using reverse key into "project/data/processed"
     """
 
-    #SUPPORTED_EXTENSION: set = {".py", ".md"}
-    SUPPORTED_EXTENSION: set = {".py"}
+    SUPPORTED_EXTENSION: set = {".py", ".md"}
+    #SUPPORTED_EXTENSION: set = {".py"}
 
     def __init__(self, chunk_size: int = MAX_CHUNK_SIZE) -> None:
         try:
@@ -56,10 +56,11 @@ class Indexor:
                 continue
             print(f"[DEBUG]: current file {path}")
             chunks = self.__chunker[path.suffix].chunk(path)
-            for chunk in chunks:
-                chunk.debug_chunk()
-            #print(f"[DEBUG]: {chunks}")
-            self.__index_chunks(chunks)
+            print(f"chunks type: {type(chunks)}")
+            if chunks:
+                for chunk in chunks:
+                    chunk.debug_chunk()
+                self.__index_chunks(chunks)
 
     def __index_chunks(self, chunks: List[Chunk]) -> None:
         print("[RAG LOG] - Indexing the chunks...")
