@@ -51,7 +51,9 @@ class MarkDownChunker(FileChunker):
                     path,
                     section,
                     content,
-                    tokens
+                    ChunkType.MARKDOWN_SECTION,
+                    tokens,
+                    None
                 )
             ]
 
@@ -78,9 +80,9 @@ class MarkDownChunker(FileChunker):
                         path,
                         section,
                         candidate,
+                        ChunkType.MARKDOWN_SECTION,
                         tokens,
-                        start=content_start,
-                        end=child.end
+                        None
                     )
                 )
                 content_start = child.end
@@ -128,7 +130,7 @@ class MarkDownChunker(FileChunker):
             file_path=path,
             start=section.start,
             end=section.end,
-            chunk_type=type,
+            chunk_type=chunk_type,
             parent_id=parent_id,
             tokens=tokens
         )

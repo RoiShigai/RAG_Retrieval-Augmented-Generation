@@ -32,8 +32,8 @@ class MarkDownTokenizer:
             try to respection each section from the file.
         """
         sections: List[MarkdownSection] = []
-        lines = source.splittlines(keepends=True)
-        stack = List[MarkdownSection] = []
+        lines = source.splitlines(keepends=True)
+        stack = list = []
 
         offset = 0
         in_fence = False
@@ -64,7 +64,7 @@ class MarkDownTokenizer:
             title = match.group(2).strip()
 
             section = MarkdownSection(
-                title=title,
+                tittle=title,
                 level=level,
                 start=offset,
                 end=len(source)
@@ -87,7 +87,7 @@ class MarkDownTokenizer:
                     break
         return sections
 
-    def _clean_markdown(self, source: str) -> str:
+    def __clean_markdown(self, source: str) -> str:
         """
         Clean a Markdown content from Markdown vocabulary
         """
