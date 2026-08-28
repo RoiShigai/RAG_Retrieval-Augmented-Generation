@@ -1,3 +1,8 @@
+class RagError(Exception):
+    def __init__(self, err: str) -> None:
+        super().__init__(err)
+
+
 class RAG:
     def index(
             self,

@@ -1,2 +1,7 @@
 import Chunker
-__all__ = ["Chunker"]
+from .RAG import RagError
+
+__all__ = [
+    "Chunker",
+    "RagError",
+]

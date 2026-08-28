@@ -14,7 +14,7 @@ class MarkdownSection:
 
 
 class MarkDownTokenizer:
-    __TOKEN_PATTERN = re.compile(r"[A-Za-z0-9]")
+    __TOKEN_PATTERN = re.compile(r"\w+")
     __HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$")
     __FENCE_RE = re.compile(r"^[ \t]*(```+|~~~+)")
 
