@@ -1,6 +1,7 @@
-from .FileChunker import FileChunker
+from ..Tokenizer.MarkDownTokenizer import MarkDownTokenizer
+from ..Tokenizer.MarkDownTokenizer import MarkdownSection
 from ..Chunk import Chunk, IdGenerator, ChunkType
-from ..Tokenizer import MarkdownSection, MarkDownTokenizer
+from .FileChunker import FileChunker
 from pathlib import Path
 from typing import List
 

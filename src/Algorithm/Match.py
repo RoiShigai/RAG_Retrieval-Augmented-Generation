@@ -1,6 +1,6 @@
-from ..Indexor import Chunk, MarkDownTokenizer
-from collections import Counter
+from ..Indexor.Chunker.Chunk import Chunk
 from typing import List, Tuple
+import math
 
 
 class BM25Index:
@@ -12,18 +12,20 @@ class BM25Index:
         the right chunks using an inverted tokens index.
     """
 
-    def __init__(self):
+    def __init__(self, k1: float = 1.2, b: float = 0.75):
         """
         Init method of the BM25 algorithm
         """
+        self.k1: float = k1
+        self.b: float = b
         self.inverted_index: dict = dict()
         self.chunk_length: dict = dict()
         self.chunk_count: int = 0
-        self.total_chunk_length: int = 0
+        self.total_chunk_length: float = 0.0
 
     def add_chunk(self, chunk: Chunk) -> None:
         """
-        Register a Chunk into the BM25 index
+        Register a Chunk into the BM25 inverted index
 
         This function will extract the tokens frequency of the chunk,
             the len of the chunks and register all this data into
@@ -31,38 +33,98 @@ class BM25Index:
         """
         chunk_id = chunk.id
         tokens = chunk.tokens
-        frequencies = Counter(tokens)
 
         self.chunk_length[chunk_id] = len(tokens)
-        self.chunk_count += 1
-        self.total_chunk_length += len(tokens)
+        for token in tokens:
+            postings = self.inverted_index.set_default(token, {})
+            postings[chunk_id] = (postings.get(chunk_id, 0) + 1)
 
-        for token, frenquency in frequencies.items():
-            if token not in self.inverted_index:
-                self.inverted_index[token] = {}
-            self.inverted_index[token][chunk_id] = frenquency
+    def finalize(self) -> None:
+        """
+        Calculate the average chunk length
+        """
+        self.chunk_count = len(self.chunk_length)
+        if self.chunk_count == 0:
+            self.average_chunk_length = 0.0
+            return
+        self.average_chunk_length = (
+            sum(self.chunk_length.values()) / self.chunk_count
+        )
+
+    def score(self, query_tokens: List[str]) -> dict[int, float]:
+        """
+        Calculate the final BM25 score for a given User query
+        """
+        query_tokens = list(dict.fromkeys(query_tokens))
+        candidates = self.__get_candidates(query_tokens)
+        scores: dict[int, float] = {}
+
+        for chunk_id in candidates:
+            total = 0.0
+            for token in query_tokens:
+                total += self.__score_token(token, chunk_id)
+            scores[chunk_id] = total
+
+        return scores
 
     def search(
             self,
-            query: str,
-            tokenizer: MarkDownTokenizer,
+            query_tokens: List[str],
             top_k: int = 10) -> List[Tuple[int, float]]:
         """
         Return the top_k candidate chunks for a given user query.
         """
-        query_tokens = tokenizer.tokenize(query)
-        candidates = set()
+        scores = self.score(query_tokens)
+        return sorted(
+            scores.items(),
+            key=lambda item: item[1],
+            reverse=True)[:top_k]
+
+    def __idf(self, tokens: str) -> float:
+        """
+        Calculate the IDF (Inverse Document Frequency) of a given token in whole
+            Chunks
+        """
+        postings = self.inverted_index.get(tokens)
+        if not postings:
+            return 0.0
+        df = len(postings)
+        return math.log(
+            1.0 + (self.chunk_count - df + 0.5) / (df + 0.5))
+
+    def __score_token(self, token: str, chunk_id: int) -> float:
+        """
+        Calculate the score for one token in one chunk
+        """
+        postings = self.inverted_index.get(token)
+
+        if not postings:
+            return 0.0
+        tf = postings.get(chunk_id)
+        if tf is None:
+            return 0.0
+
+        chunk_len = self.chunk_length[chunk_id]
+        idf = self.__idf(token)
+
+        numerator = tf * (self.k1 + 1.0)
+        denominator = (
+            tf + self.k1 * (
+                1.0 - self.b + self.b * (
+                    chunk_len / self.average_chunk_length
+                )
+            )
+        )
+        return idf * numerator / denominator
+
+    def __get_candidates(self, query_tokens: List[str]) -> set[int]:
+        """
+        Return the candidate chunk id for a given User query
+        """
+        candidates: set[int] = set()
 
         for token in query_tokens:
             postings = self.inverted_index.get(token)
             if postings:
                 candidates.update(postings.keys())
-
-        scores = []
-
-        for chunk_id in candidates:
-            score = self._bm25_score(chunk_id, query_tokens)
-            scores.append((chunk_id, score))
-        scores.sort(key=lambda x: x[1], reverse=True)
-
-        return scores[:top_k]
+        return candidates

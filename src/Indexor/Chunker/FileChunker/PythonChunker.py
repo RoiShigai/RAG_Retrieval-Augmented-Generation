@@ -1,8 +1,8 @@
-from .FileChunker import FileChunker
-from ..Tokenizer import PythonTokenizer
-from pathlib import Path
 from ..Chunk import Chunk, IdGenerator, ChunkType
+from ..Tokenizer import PythonTokenizer
+from .FileChunker import FileChunker
 from typing import List, Tuple
+from pathlib import Path
 import ast
 
 

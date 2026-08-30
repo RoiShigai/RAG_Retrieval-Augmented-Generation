@@ -1,4 +1,6 @@
-from Chunker import PythonChunker, MarkDownChunker, IdGenerator, Chunk
+from .Chunker.FileChunker.MarkDownChunker import MarkDownChunker
+from .Chunker.FileChunker.PythonChunker import PythonChunker
+from .Chunker.Chunk import IdGenerator, Chunk
 from typing import List
 from pathlib import Path
 
