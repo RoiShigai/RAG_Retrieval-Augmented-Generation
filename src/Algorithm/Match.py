@@ -36,7 +36,7 @@ class BM25Index:
 
         self.chunk_length[chunk_id] = len(tokens)
         for token in tokens:
-            postings = self.inverted_index.set_default(token, {})
+            postings = self.inverted_index.setdefault(token, {})
             postings[chunk_id] = (postings.get(chunk_id, 0) + 1)
 
     def finalize(self) -> None:
