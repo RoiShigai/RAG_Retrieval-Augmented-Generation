@@ -1,5 +1,5 @@
 from ..Chunk import Chunk, IdGenerator, ChunkType
-from ..Tokenizer import PythonTokenizer
+from ..Tokenizer.PythonTokenizer import PythonTokenizer
 from .FileChunker import FileChunker
 from typing import List, Tuple
 from pathlib import Path
@@ -22,7 +22,13 @@ class PythonChunker(FileChunker):
         """
         Init method of the PythonFileCHunker class,
             This method create an instance of the PythonTokenizer
+
+        Args:
+            chunk_size: Maximum number of source characters in a chunk.
+            id_generator: Generator used to assign chunk identifiers.
         """
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be greater than zero")
         self.__id_generator = id_generator
         self.__max_chunk_size = chunk_size
 
@@ -40,7 +46,6 @@ class PythonChunker(FileChunker):
 
         Parameters:
             path: Path | the path object of the corresponding python file.
-            chunk_size: int | the max size of a chunk
 
         Return:
             List[Chunk]
@@ -69,12 +74,12 @@ class PythonChunker(FileChunker):
         return chunks
 
     def __chunk_function(
-        self,
-        path: Path,
-        source: str,
-        node: ast.FunctionDef,
-        offset: List[int],
-        parent_id: int | None = None) -> List[chunk]:
+            self,
+            path: Path,
+            source: str,
+            node: ast.FunctionDef | ast.AsyncFunctionDef,
+            offset: List[int],
+            parent_id: int | None = None) -> List[Chunk]:
         """
         Take the input function node and return a list of chunk representing it
         """
@@ -82,7 +87,7 @@ class PythonChunker(FileChunker):
         tokens = self.__tokenizer.tokens_for_range(start, end)
         id: int = self.__id_generator.next()
 
-        if len(tokens) <= self.__max_chunk_size:
+        if self.__fits_character_limit(source, start, end):
             return [
                 Chunk(
                     id=id,
@@ -103,22 +108,15 @@ class PythonChunker(FileChunker):
             offset: List[int],
             node: ast.FunctionDef | ast.AsyncFunctionDef,
             parent_id: int | None = None) -> List[Chunk]:
-        """ Try to split the function node by statement into multiple chunks """
+        """Try to split a function node by statement into multiple chunks."""
         chunks: List[Chunk] = []
 
         if not node.body:
             start, end = self.__node_range(offset, node)
-            return [
-                Chunk(
-                    id=self.__id_generator.next(),
-                    file_path=path,
-                    start=start,
-                    end=end,
-                    tokens=self.__tokenizer.tokens_for_range(start, end),
-                    chunk_type=ChunkType.PYTHON_FUNCTION,
-                    parent_id=parent_id
-                )
-            ]
+            return self.__range_chunks(
+                path, source, start, end,
+                ChunkType.PYTHON_FUNCTION, parent_id
+            )
         current_start = None
         current_end = None
         for statement in node.body:
@@ -131,47 +129,26 @@ class PythonChunker(FileChunker):
                 current_end = statement_end
                 continue
 
-            candidate_tokens = self.__tokenizer.tokens_for_range(
-                current_start,
-                statement_end
-            )
-
-            if len(candidate_tokens) < self.__max_chunk_size:
+            if self.__fits_character_limit(
+                    source, current_start, statement_end):
                 current_end = statement_end
                 continue
 
-            chunk_tokens = self.__tokenizer.tokens_for_range(
-                current_start,
-                current_end
-            )
-            chunks.append(
-                Chunk(
-                    id=self.__id_generator.next(),
-                    file_path=path,
-                    start=current_start,
-                    end=current_end,
-                    tokens=chunk_tokens,
-                    chunk_type=ChunkType.PYTHON_FUNCTION,
-                    parent_id=parent_id
+            if current_end is not None:
+                chunks.extend(
+                    self.__range_chunks(
+                        path, source, current_start, current_end,
+                        ChunkType.PYTHON_FUNCTION, parent_id
+                    )
                 )
-            )
-            current_start = statement_start
-            current_end = statement_end
+                current_start = statement_start
+                current_end = statement_end
 
         if current_start is not None and current_end is not None:
-            chunk_tokens = self.__tokenizer.tokens_for_range(
-                current_start,
-                current_end
-            )
-            chunks.append(
-                Chunk(
-                    id=self.__id_generator.next(),
-                    file_path=path,
-                    start=current_start,
-                    end=current_end,
-                    tokens=chunk_tokens,
-                    chunk_type=ChunkType.PYTHON_FUNCTION,
-                    parent_id=parent_id
+            chunks.extend(
+                self.__range_chunks(
+                    path, source, current_start, current_end,
+                    ChunkType.PYTHON_FUNCTION, parent_id
                 )
             )
         return chunks
@@ -190,7 +167,7 @@ class PythonChunker(FileChunker):
         tokens = self.__tokenizer.tokens_for_range(start, end)
         id: int = self.__id_generator.next()
 
-        if len(tokens) <= self.__max_chunk_size:
+        if self.__fits_character_limit(source, start, end):
             return [
                 Chunk(
                     id=id,
@@ -231,50 +208,98 @@ class PythonChunker(FileChunker):
                 current_start = child_start
                 current_end = child_end
                 continue
-            candidate_tokens = self.__tokenizer.tokens_for_range(
-                current_start,
-                child_end
-            )
-
-            if len(candidate_tokens) <= self.__max_chunk_size:
+            if self.__fits_character_limit(
+                    source, current_start, child_end):
                 current_end = child_end
                 continue
 
-            chunk_tokens = self.__tokenizer.tokens_for_range(
-                current_start,
-                current_end
-            )
-
-            chunks.append(
-                Chunk(
-                    id=self.__id_generator.next(),
-                    file_path=path,
-                    start=current_start,
-                    end=current_end,
-                    tokens=chunk_tokens,
-                    chunk_type=ChunkType.PYTHON_CLASS_PART,
-                    parent_id=parent_id
+            if current_end is None:
+                continue
+            chunks.extend(
+                self.__range_chunks(
+                    path, source, current_start, current_end,
+                    ChunkType.PYTHON_CLASS_PART, parent_id
                 )
             )
             current_start = child_start
             current_end = child_end
 
         if current_start is not None and current_end is not None:
-            chunk_tokens = self.__tokenizer.tokens_for_range(
-                current_start,
-                current_end
-            )
-            chunks.append(
-                Chunk(
-                    id=self.__id_generator.next(),
-                    file_path=path,
-                    start=current_start,
-                    end=current_end,
-                    tokens=chunk_tokens,
-                    chunk_type=ChunkType.PYTHON_CLASS_PART,
-                    parent_id=parent_id
+            chunks.extend(
+                self.__range_chunks(
+                    path, source, current_start, current_end,
+                    ChunkType.PYTHON_CLASS_PART, parent_id
                 )
             )
+        return chunks
+
+    def __fits_character_limit(
+            self, source: str, start: int, end: int) -> bool:
+        """Return whether a source range fits within the configured limit.
+
+        Args:
+            source: Complete source text.
+            start: Inclusive source character offset.
+            end: Exclusive source character offset.
+
+        Returns:
+            ``True`` when the candidate contains at most the configured number
+            of source characters.
+        """
+        return end - start <= self.__max_chunk_size
+
+    def __range_chunks(
+            self,
+            path: Path,
+            source: str,
+            start: int,
+            end: int,
+            chunk_type: ChunkType,
+            parent_id: int | None) -> List[Chunk]:
+        """Create one chunk, falling back to source lines when necessary."""
+        if self.__fits_character_limit(source, start, end):
+            return [Chunk(
+                id=self.__id_generator.next(),
+                file_path=path,
+                start=start,
+                end=end,
+                tokens=self.__tokenizer.tokens_for_range(start, end),
+                chunk_type=chunk_type,
+                parent_id=parent_id
+            )]
+
+        chunks: List[Chunk] = []
+        current = start
+        for line in source[start:end].splitlines(keepends=True):
+            line_end = current + len(line)
+            for chunk_start in range(current, line_end, self.__max_chunk_size):
+                chunk_end = min(chunk_start + self.__max_chunk_size, line_end)
+                chunks.append(Chunk(
+                    id=self.__id_generator.next(),
+                    file_path=path,
+                    start=chunk_start,
+                    end=chunk_end,
+                    tokens=self.__tokenizer.tokens_for_range(
+                        chunk_start, chunk_end
+                    ),
+                    chunk_type=chunk_type,
+                    parent_id=parent_id
+                ))
+            current = line_end
+        if current < end:
+            for chunk_start in range(current, end, self.__max_chunk_size):
+                chunk_end = min(chunk_start + self.__max_chunk_size, end)
+                chunks.append(Chunk(
+                    id=self.__id_generator.next(),
+                    file_path=path,
+                    start=chunk_start,
+                    end=chunk_end,
+                    tokens=self.__tokenizer.tokens_for_range(
+                        chunk_start, chunk_end
+                    ),
+                    chunk_type=chunk_type,
+                    parent_id=parent_id
+                ))
         return chunks
 
     def __statement_children(
@@ -338,7 +363,10 @@ class PythonChunker(FileChunker):
         """ Return the char position of the beginning statement """
         return offsets[line - 1] + column
 
-    def __node_range(self, offset: List[int], node: ast.AST) -> Tuple[int, int]:
+    def __node_range(
+            self,
+            offset: List[int],
+            node: ast.stmt) -> Tuple[int, int]:
         """ Return the start and end char position of the node """
         start = self.__get_offset(offset, node.lineno, node.col_offset)
         end = self.__get_offset(offset, node.end_lineno, node.end_col_offset)

@@ -22,6 +22,7 @@ class IdGenerator:
     """
 
     def __init__(self) -> None:
+
         self.__next_id: int = 0
 
     def next(self) -> int:

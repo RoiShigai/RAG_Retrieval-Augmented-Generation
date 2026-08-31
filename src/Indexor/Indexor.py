@@ -1,6 +1,6 @@
 from .Chunker.FileChunker.MarkDownChunker import MarkDownChunker
 from .Chunker.FileChunker.PythonChunker import PythonChunker
-from .Chunker.Chunk import IdGenerator, Chunk
+from .Chunker.Chunk import IdGenerator, Chunk 
 from typing import List
 from pathlib import Path
 
@@ -26,10 +26,6 @@ class Indexor:
     SUPPORTED_EXTENSION: set = {".py", ".md"}
 
     def __init__(self, chunk_size: int = MAX_CHUNK_SIZE) -> None:
-#       if chunk_size > MAX_CHUNK_SIZE:
-#           raise RagError(
-#               f"Chunk size cannot go above {MAX_CHUNK_SIZE}"
-#           )
         self.__id_generator = IdGenerator()
         self.__chunker = {
             ".py": PythonChunker(chunk_size, self.__id_generator),
@@ -62,14 +58,8 @@ class Indexor:
             if chunks:
                 for chunk in chunks:
                     chunk.debug_chunk()
-                    print(f"token: {chunk.tokens}")
                 self.__index_chunks(chunks)
 
     def __index_chunks(self, chunks: List[Chunk]) -> None:
         print("[RAG LOG] - Indexing the chunks...")
         pass
-
-
-if __name__ == "__main__":
-    indexor = Indexor(700)
-    indexor.index(Path("vllm-0.10.1"))

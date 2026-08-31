@@ -1,11 +1,5 @@
-import sys
-import fire
-from .RAG import RAG
+from .Indexor import Indexor
+from pathlib import Path
 
-try:
-    rag = RAG()
-    fire.Fire(RAG)
-
-except (Exception) as e:
-    print(f"Catch: {e.__name__}: {e}")
-    sys.exit()
+indexor = Indexor.Indexor()
+indexor.index(Path("vllm-0.10.1"))
