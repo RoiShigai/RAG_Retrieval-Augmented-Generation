@@ -60,6 +60,7 @@ class Indexor:
             modified = self.__database.check_file_modified(path)
             metadata = self.__database.get_file_metadata(path)
             if modified:
+                print(f"Chunking {path}")
                 path_hash, content_hash = (
                     self.__database.get_file_identity(path)
                 )

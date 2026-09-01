@@ -27,7 +27,7 @@ class RAG:
     def index(
             self,
             corpus: Path,
-            max_chunk_size: int) -> None:
+            max_chunk_size: int = 2000) -> None:
         """
             Indexing method for the RAG. This method will launch
                 the indexor pipeline on a given corpus path and
@@ -45,6 +45,7 @@ class RAG:
 
         inverted_index = self.__bm25.create_index(chunk_corpus)
         self.__database.store_bm25_index(inverted_index)
+        print("End of Indexing...")
 
     def search(
             self,
@@ -75,3 +76,13 @@ class RAG:
             student_search_results_path: str,
             dataset_path: str) -> None:
         ...
+
+    def debug_db(self) -> None:
+        chunks_db = self.__database.get_all_chunks()
+        reverse_index_db = self.__database.load_bm25_index()
+        print("[DATABASE CHUNK DEBUGGING]")
+        for chunks in chunks_db:
+            chunks.debug_chunk()
+        print("[DATABASE INDEX DEBUGGING]")
+        for k, v in reverse_index_db.items():
+            print("key: {k}: value: {v}")
