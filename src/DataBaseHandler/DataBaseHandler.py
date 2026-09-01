@@ -2,9 +2,9 @@ from pathlib import Path
 from Indexor.Chunker.Chunk import Chunk
 
 
-class StoringManager:
+class DataBaseHandler:
     """
-    StoringManager Class Definition
+    DataBaseHandler Class Definition
 
     The StoringManager is the class used to check the database
         and will perform every interaction with it.

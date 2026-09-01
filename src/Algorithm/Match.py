@@ -23,6 +23,16 @@ class BM25Index:
         self.chunk_count: int = 0
         self.total_chunk_length: float = 0.0
 
+    def create_index(self, chunks: List[Chunk]) -> dict:
+        """
+        Main function of the BM25Index. This method will rank every chunks
+        from a corpus and will rank them.
+        """
+        for chunk in chunks:
+            self.add_chunk(chunk)
+        self.finalize()
+        return self.inverted_index
+
     def add_chunk(self, chunk: Chunk) -> None:
         """
         Register a Chunk into the BM25 inverted index

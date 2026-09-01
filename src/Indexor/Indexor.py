@@ -32,19 +32,18 @@ class Indexor:
             ".md": MarkDownChunker(chunk_size, self.__id_generator)
         }
 
-    def index(self, root_file: Path) -> None:
+    def generate_chunks(self, root_file: Path) -> List[Chunk]:
         """
         Main function for Indexing files into chunks.
         This function will start to chunkenize every supported file
             into chunks containing the appropriate metadata,
-            and then index it.
+            and return a chunk list of the corresponding root file.
 
         Parameter:
             root_file: the directory where the Indexer will gather the files.
 
         Return:
-            This function return None but will display logs
-                about the indexing process
+            This function will return a list of chunks
         """
         chunks: List[Chunk] = []
         for path in root_file.rglob("*"):
@@ -60,6 +59,4 @@ class Indexor:
                     chunk.debug_chunk()
                 self.__index_chunks(chunks)
 
-    def __index_chunks(self, chunks: List[Chunk]) -> None:
-        print("[RAG LOG] - Indexing the chunks...")
-        pass
+            return chunks
