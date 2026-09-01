@@ -453,4 +453,5 @@ en.subject.pdf
 test.py
 output
 rag_env
+data/processed
 AGENTS.md
