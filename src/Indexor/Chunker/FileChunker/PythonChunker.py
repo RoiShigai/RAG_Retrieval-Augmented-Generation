@@ -85,12 +85,11 @@ class PythonChunker(FileChunker):
         """
         start, end = self.__node_range(offset, node)
         tokens = self.__tokenizer.tokens_for_range(start, end)
-        id: int = self.__id_generator.next()
 
         if self.__fits_character_limit(source, start, end):
             return [
                 Chunk(
-                    id=id,
+                    id=self.__id_generator.next(),
                     file_path=path,
                     start=start,
                     end=end,
@@ -99,7 +98,7 @@ class PythonChunker(FileChunker):
                     parent_id=parent_id
                 )
             ]
-        return self.__split_function(path, source, offset, node, id)
+        return self.__split_function(path, source, offset, node)
 
     def __split_function(
             self,
@@ -165,12 +164,11 @@ class PythonChunker(FileChunker):
         """
         start, end = self.__node_range(offset, node)
         tokens = self.__tokenizer.tokens_for_range(start, end)
-        id: int = self.__id_generator.next()
 
         if self.__fits_character_limit(source, start, end):
             return [
                 Chunk(
-                    id=id,
+                    id=self.__id_generator.next(),
                     file_path=file_path,
                     start=start,
                     end=end,
@@ -184,7 +182,7 @@ class PythonChunker(FileChunker):
             source,
             offset,
             node,
-            id
+            self.__id_generator.next()
         )
 
     def __split_class(
