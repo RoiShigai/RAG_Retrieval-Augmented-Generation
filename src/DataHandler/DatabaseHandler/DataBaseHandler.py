@@ -172,13 +172,17 @@ class DataBaseHandler:
         if row is None:
             raise KeyError((hash_id, chunk_id))
         tokens = self.__db.execute(
-            "SELECT token FROM reverse_key WHERE hash_id = ? AND chunk_id = ? "
+            "SELECT token, frequency FROM reverse_key "
+            "WHERE hash_id = ? AND chunk_id = ? "
             "ORDER BY token", (hash_id, chunk_id)
         ).fetchall()
+        token_values: list[str] = []
+        for token, frequency in tokens:
+            token_values.extend([token] * frequency)
         return Chunk(
             id=row[0], file_path=Path(row[1]), start=row[3], end=row[4],
             chunk_type=ChunkType(row[5]), parent_id=row[6],
-            tokens=[token[0] for token in tokens],
+            tokens=token_values,
             file_path_hash=hash_id, file_content_hash=row[2],
         )
 

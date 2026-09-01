@@ -50,12 +50,14 @@ class Indexor:
         Return:
             This function will return a list of chunks
         """
-        all_chunks: List[Chunk] = []
+        fresh_chunks: dict[tuple[str, int], Chunk] = {}
+
         for path in root_file.rglob("*"):
             if not path.is_file():
                 continue
             if path.suffix not in self.SUPPORTED_EXTENSION:
                 continue
+
             print(f"[DEBUG]: current file {path}")
             modified = self.__database.check_file_modified(path)
             metadata = self.__database.get_file_metadata(path)
@@ -69,11 +71,16 @@ class Indexor:
                 for chunk in chunks:
                     chunk.file_path_hash = path_hash
                     chunk.file_content_hash = content_hash
+                    fresh_chunks[(path_hash, chunk.id)] = chunk
                 self.__database.update_file_metadata(path)
                 self.__database.replace_file_chunks(path, chunks)
             elif metadata is not None and path.stat().st_mtime != metadata[
                     "modified_timestamp"]:
                 self.__database.update_file_metadata(path)
 
-        all_chunks.extend(self.__database.get_all_chunks())
-        return all_chunks
+        chunks_by_key = {
+            (chunk.file_path_hash, chunk.id): chunk
+            for chunk in self.__database.get_all_chunks()
+        }
+        chunks_by_key.update(fresh_chunks)
+        return list(chunks_by_key.values())

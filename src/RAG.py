@@ -80,9 +80,9 @@ class RAG:
     def debug_db(self) -> None:
         chunks_db = self.__database.get_all_chunks()
         reverse_index_db = self.__database.load_bm25_index()
-        print("[DATABASE CHUNK DEBUGGING]")
-        for chunks in chunks_db:
-            chunks.debug_chunk()
+#       print("[DATABASE CHUNK DEBUGGING]")
+#       for chunks in chunks_db:
+#           chunks.debug_chunk()
         print("[DATABASE INDEX DEBUGGING]")
         for k, v in reverse_index_db.items():
-            print("key: {k}: value: {v}")
+            print(f"key: {k}: value: {v}")

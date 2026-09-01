@@ -31,8 +31,52 @@ def test_chunk_and_reverse_key_round_trip(tmp_path: Path) -> None:
 
     loaded = database.get_chunk(path_hash, 0)
     assert loaded.file_content_hash == content_hash
-    assert loaded.tokens == ["title"]
+    assert loaded.tokens == ["title", "title"]
     assert database.load_bm25_index() == {"title": {(path_hash, 0): 2}}
+    database.close()
+
+
+def test_load_bm25_index_keeps_all_postings(tmp_path: Path) -> None:
+    database = DataBaseHandler(tmp_path / "index.db")
+    source = tmp_path / "sample.md"
+    source.write_text("# title\n", encoding="utf-8")
+    path_hash, content_hash = database.get_file_identity(source)
+    database.update_file_metadata(source)
+    database.replace_file_chunks(source, [Chunk(
+        id=0,
+        file_path=source,
+        start=0,
+        end=8,
+        chunk_type=ChunkType.MARKDOWN_SECTION,
+        parent_id=None,
+        tokens=["title"],
+        file_path_hash=path_hash,
+        file_content_hash=content_hash,
+    ), Chunk(
+        id=1,
+        file_path=source,
+        start=0,
+        end=8,
+        chunk_type=ChunkType.MARKDOWN_SECTION,
+        parent_id=None,
+        tokens=["title"],
+        file_path_hash=path_hash,
+        file_content_hash=content_hash,
+    )])
+
+    database.store_bm25_index({
+        "title": {
+            (path_hash, 0): 1,
+            (path_hash, 1): 1,
+        },
+    })
+
+    assert database.load_bm25_index() == {
+        "title": {
+            (path_hash, 0): 1,
+            (path_hash, 1): 1,
+        },
+    }
     database.close()
 
 
