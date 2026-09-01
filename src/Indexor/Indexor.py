@@ -1,6 +1,7 @@
 from .Chunker.FileChunker.MarkDownChunker import MarkDownChunker
 from .Chunker.FileChunker.PythonChunker import PythonChunker
 from .Chunker.Chunk import IdGenerator, Chunk
+from ..DataHandler.DatabaseHandler.DataBaseHandler import DataBaseHandler
 from typing import List
 from pathlib import Path
 
@@ -23,9 +24,13 @@ class Indexor:
         using reverse key into "project/data/processed"
     """
 
-    SUPPORTED_EXTENSION: set = {".py", ".md"}
+    SUPPORTED_EXTENSION: set[str] = {".py", ".md"}
 
-    def __init__(self, chunk_size: int = MAX_CHUNK_SIZE) -> None:
+    def __init__(
+            self,
+            database: DataBaseHandler,
+            chunk_size: int = MAX_CHUNK_SIZE) -> None:
+        self.__database = database
         self.__id_generator = IdGenerator()
         self.__chunker = {
             ".py": PythonChunker(chunk_size, self.__id_generator),
@@ -45,18 +50,29 @@ class Indexor:
         Return:
             This function will return a list of chunks
         """
-        chunks: List[Chunk] = []
+        all_chunks: List[Chunk] = []
         for path in root_file.rglob("*"):
             if not path.is_file():
                 continue
             if path.suffix not in self.SUPPORTED_EXTENSION:
                 continue
             print(f"[DEBUG]: current file {path}")
-            chunks = self.__chunker[path.suffix].chunk(path)
-            print(f"chunks type: {type(chunks)}")
-            if chunks:
+            modified = self.__database.check_file_modified(path)
+            metadata = self.__database.get_file_metadata(path)
+            if modified:
+                path_hash, content_hash = (
+                    self.__database.get_file_identity(path)
+                )
+                self.__id_generator.reset()
+                chunks = self.__chunker[path.suffix].chunk(path)
                 for chunk in chunks:
-                    chunk.debug_chunk()
-                self.__index_chunks(chunks)
+                    chunk.file_path_hash = path_hash
+                    chunk.file_content_hash = content_hash
+                self.__database.update_file_metadata(path)
+                self.__database.replace_file_chunks(path, chunks)
+            elif metadata is not None and path.stat().st_mtime != metadata[
+                    "modified_timestamp"]:
+                self.__database.update_file_metadata(path)
 
-            return chunks
+        all_chunks.extend(self.__database.get_all_chunks())
+        return all_chunks

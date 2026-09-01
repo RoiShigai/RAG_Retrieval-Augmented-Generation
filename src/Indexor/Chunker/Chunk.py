@@ -35,6 +35,10 @@ class IdGenerator:
         self.__next_id += 1
         return chunk_id
 
+    def reset(self) -> None:
+        """Reset numbering for the next file."""
+        self.__next_id = 0
+
 
 @dataclass
 class Chunk:
@@ -46,6 +50,11 @@ class Chunk:
     chunk_type: ChunkType
     parent_id: int | None
     tokens: List[str]
+    file_path_hash: str = ""
+    file_content_hash: str = ""
 
     def debug_chunk(self) -> None:
-        print(f"{self.id}, {self.file_path}, {self.start}, {self.end}, {self.chunk_type}, {self.parent_id}")
+        print(
+            f"{self.id}, {self.file_path}, {self.start}, {self.end}, "
+            f"{self.chunk_type}, {self.parent_id}"
+        )
