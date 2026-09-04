@@ -178,7 +178,6 @@ class BM25Index:
         Return the candidate chunk id for a given User query
         """
         candidates: set[ChunkKey] = set()
-
         for token in query_tokens:
             postings = self.inverted_index.get(token)
             if postings:

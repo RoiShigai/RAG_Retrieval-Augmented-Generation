@@ -357,15 +357,36 @@ class DataBaseHandler:
             self, filename: Path, chunks: Iterable[Chunk]) -> None:
         """Replace all stored chunks for a file in one transaction."""
         hash_id = self.__path_hash(filename)
-        self.__db.execute("DELETE FROM chunks WHERE hash_id = ?", (hash_id,))
-        self.__db.executemany(
-            "INSERT INTO chunks(hash_id, chunk_id, start, end, "
-            "chunk_type, parent_id) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            [(chunk.file_path_hash, chunk.id, chunk.start, chunk.end,
-              chunk.chunk_type.value, chunk.parent_id) for chunk in chunks],
-        )
-        self.__db.commit()
+        chunk_list = list(chunks)
+        chunk_rows = [
+            (chunk.file_path_hash, chunk.id, chunk.start, chunk.end,
+             chunk.chunk_type.value, chunk.parent_id)
+            for chunk in chunk_list
+        ]
+        token_rows: list[tuple[str, int, str, int]] = []
+        for chunk in chunk_list:
+            frequencies: dict[str, int] = {}
+            for token in chunk.tokens:
+                frequencies[token] = frequencies.get(token, 0) + 1
+            token_rows.extend(
+                (chunk.file_path_hash, chunk.id, token, frequency)
+                for token, frequency in frequencies.items()
+            )
+
+        with self.__db:
+            self.__db.execute(
+                "DELETE FROM chunks WHERE hash_id = ?", (hash_id,)
+            )
+            self.__db.executemany(
+                "INSERT INTO chunks(hash_id, chunk_id, start, end, "
+                "chunk_type, parent_id) VALUES (?, ?, ?, ?, ?, ?)",
+                chunk_rows,
+            )
+            self.__db.executemany(
+                "INSERT INTO chunk_tokens(hash_id, chunk_id, token, "
+                "frequency) VALUES (?, ?, ?, ?)",
+                token_rows,
+            )
 
     def close(self) -> None:
         """Close the SQLite connection."""

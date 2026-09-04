@@ -30,3 +30,20 @@ def test_reindex_keeps_tokens_for_unchanged_files(tmp_path: Path) -> None:
     assert any("gamma" in tokens for tokens in tokens_by_file.values())
     assert any("beta" in tokens for tokens in tokens_by_file.values())
     database.close()
+
+
+def test_generated_tokens_are_persisted_for_bm25_rebuild(
+        tmp_path: Path) -> None:
+    database = DataBaseHandler(tmp_path / "index.db")
+    source = tmp_path / "sample.py"
+    source.write_text("def sample():\n    return searchable\n")
+
+    Indexor(database).generate_chunks(tmp_path)
+    persisted_chunks = database.get_all_chunks()
+    rebuilt_index = BM25Index()
+    rebuilt_index.create_index(persisted_chunks)
+
+    assert persisted_chunks
+    assert any("searchable" in chunk.tokens for chunk in persisted_chunks)
+    assert "searchable" in rebuilt_index.inverted_index
+    database.close()

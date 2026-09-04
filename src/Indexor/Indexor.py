@@ -69,6 +69,7 @@ class Indexor:
                 self.__id_generator.reset()
                 chunks = self.__chunker[path.suffix].chunk(path)
                 for chunk in chunks:
+                    print(chunk)
                     chunk.file_path_hash = path_hash
                     chunk.file_content_hash = content_hash
                     fresh_chunks[(path_hash, chunk.id)] = chunk

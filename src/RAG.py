@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List, cast
 
 from .Algorithm.Match import ChunkKey
+from .Model import MinimalSource
 
 
 class RagError(Exception):
@@ -84,10 +85,21 @@ class RAG:
     def search(
             self,
             query: str,
-            k: int) -> list[tuple[int | tuple[str, int], float]]:
-        """Search the synchronized corpus for the query."""
+            k: int) -> list[MinimalSource]:
+        """Return source locations matching the query."""
         self.__synchronize()
-        return self.__bm25.search(query.split(), k)
+        matches = self.__bm25.search(query.split(), k)
+        sources: list[MinimalSource] = []
+        for chunk_key, _score in matches:
+            if not isinstance(chunk_key, tuple):
+                continue
+            chunk = self.__database.get_chunk(*chunk_key)
+            sources.append(MinimalSource.model_construct(
+                file_path=str(chunk.file_path),
+                first_character_index=chunk.start,
+                last_character_index=chunk.end,
+            ))
+        return sources
 
     def search_dataset(
             self,
