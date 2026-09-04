@@ -14,7 +14,7 @@ class BM25Index:
         the right chunks using an inverted tokens index.
     """
 
-    def __init__(self, k1: float = 1.2, b: float = 0.75):
+    def __init__(self, k1: float = 1.2, b: float = 0.75) -> None:
         """
         Init method of the BM25 algorithm
         """
@@ -24,6 +24,30 @@ class BM25Index:
         self.chunk_length: dict[ChunkKey, int] = {}
         self.chunk_count: int = 0
         self.total_chunk_length: float = 0.0
+        self.average_chunk_length: float = 0.0
+        self.token_stats: dict[str, int] = {}
+
+    @classmethod
+    def from_persisted(
+            cls,
+            inverted_index: dict[str, dict[ChunkKey, int]],
+            token_stats: dict[str, int],
+            chunk_length: dict[ChunkKey, int],
+            chunk_count: int,
+            k1: float = 1.2,
+            b: float = 0.75,
+            ) -> "BM25Index":
+        """Build a BM25 index from statistics stored in the database."""
+        index = cls(k1, b)
+        index.inverted_index = inverted_index
+        index.chunk_length = chunk_length
+        index.chunk_count = chunk_count
+        index.total_chunk_length = float(sum(chunk_length.values()))
+        index.average_chunk_length = (
+            index.total_chunk_length / chunk_count if chunk_count else 0.0
+        )
+        index.token_stats = token_stats
+        return index
 
     def create_index(
             self, chunks: List[Chunk]
@@ -34,6 +58,7 @@ class BM25Index:
         """
         self.inverted_index.clear()
         self.chunk_length.clear()
+        self.token_stats = {}
         for chunk in chunks:
             self.add_chunk(chunk)
         self.finalize()
@@ -66,11 +91,16 @@ class BM25Index:
         Calculate the average chunk length
         """
         self.chunk_count = len(self.chunk_length)
+        self.total_chunk_length = float(sum(self.chunk_length.values()))
+        self.token_stats = {
+            token: len(postings)
+            for token, postings in self.inverted_index.items()
+        }
         if self.chunk_count == 0:
             self.average_chunk_length = 0.0
             return
         self.average_chunk_length = (
-            sum(self.chunk_length.values()) / self.chunk_count
+            self.total_chunk_length / self.chunk_count
         )
 
     def score(self, query_tokens: List[str]) -> dict[ChunkKey, float]:
@@ -107,10 +137,14 @@ class BM25Index:
         Calculate the IDF (Inverse Document Frequency) of a token in all
             chunks.
         """
-        postings = self.inverted_index.get(tokens)
-        if not postings:
+        df = self.token_stats.get(tokens)
+        if df is None:
+            postings = self.inverted_index.get(tokens)
+            if not postings:
+                return 0.0
+            df = len(postings)
+        if df == 0:
             return 0.0
-        df = len(postings)
         return math.log(
             1.0 + (self.chunk_count - df + 0.5) / (df + 0.5))
 

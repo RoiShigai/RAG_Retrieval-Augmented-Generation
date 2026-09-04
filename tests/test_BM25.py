@@ -106,3 +106,18 @@ def test_basic_k():
     )
 
     assert len(results) == 2
+
+
+def test_persisted_index_has_same_ranking() -> None:
+    original = BM25Index()
+    original.create_index([chunk_01, chunk_02, chunk_03])
+    restored = BM25Index.from_persisted(
+        original.inverted_index,
+        original.token_stats,
+        original.chunk_length,
+        original.chunk_count,
+    )
+
+    assert restored.search(["compiler", "python"], top_k=3) == (
+        original.search(["compiler", "python"], top_k=3)
+    )

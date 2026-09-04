@@ -62,9 +62,38 @@ class DataBaseHandler:
                     REFERENCES chunks(hash_id, chunk_id)
                     ON DELETE CASCADE
             );
+            CREATE TABLE IF NOT EXISTS chunk_tokens (
+                hash_id TEXT NOT NULL,
+                chunk_id INTEGER NOT NULL,
+                token TEXT NOT NULL,
+                frequency INTEGER NOT NULL CHECK (frequency > 0),
+                PRIMARY KEY (hash_id, chunk_id, token),
+                FOREIGN KEY (hash_id, chunk_id)
+                    REFERENCES chunks(hash_id, chunk_id)
+                    ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS token_stats (
+                token TEXT PRIMARY KEY,
+                chunk_frequency INTEGER NOT NULL CHECK (chunk_frequency > 0)
+            );
+            CREATE TABLE IF NOT EXISTS index_metadata (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                total_chunks INTEGER NOT NULL CHECK (total_chunks >= 0)
+            );
             """
         )
         self.__db.commit()
+        self.__migrate_bm25_tables()
+
+    def __migrate_bm25_tables(self) -> None:
+        """Copy legacy reverse-key data into the persistent BM25 tables."""
+        with self.__db:
+            self.__db.execute(
+                "INSERT OR IGNORE INTO chunk_tokens "
+                "(hash_id, chunk_id, token, frequency) "
+                "SELECT hash_id, chunk_id, token, frequency FROM reverse_key"
+            )
+            self.__refresh_bm25_metadata()
 
     def __path_hash(self, filename: Path) -> str:
         """Return the stable identifier for a file path."""
@@ -172,7 +201,7 @@ class DataBaseHandler:
         if row is None:
             raise KeyError((hash_id, chunk_id))
         tokens = self.__db.execute(
-            "SELECT token, frequency FROM reverse_key "
+            "SELECT token, frequency FROM chunk_tokens "
             "WHERE hash_id = ? AND chunk_id = ? "
             "ORDER BY token", (hash_id, chunk_id)
         ).fetchall()
@@ -191,19 +220,46 @@ class DataBaseHandler:
         """
             Store the Index created by the BM25 algorithm
         """
-        self.__db.execute("DELETE FROM reverse_key")
-        rows = []
+        rows: list[tuple[str, int, str, int]] = []
         for token, postings in index.items():
             for chunk_key, frequency in postings.items():
                 if not isinstance(chunk_key, tuple):
                     raise ValueError("Database indexes require hashed chunks")
                 hash_id, chunk_id = chunk_key
                 rows.append((hash_id, chunk_id, token, frequency))
-        self.__db.executemany(
-            "INSERT INTO reverse_key(hash_id, chunk_id, token, frequency) "
-            "VALUES (?, ?, ?, ?)", rows
-        )
-        self.__db.commit()
+        chunk_lengths: dict[tuple[str, int], int] = {}
+        token_stats: dict[str, int] = {}
+        for hash_id, chunk_id, token, frequency in rows:
+            key = (hash_id, chunk_id)
+            chunk_lengths[key] = chunk_lengths.get(key, 0) + frequency
+            token_stats[token] = token_stats.get(token, 0) + 1
+
+        with self.__db:
+            self.__db.execute("DELETE FROM reverse_key")
+            self.__db.execute("DELETE FROM chunk_tokens")
+            self.__db.execute("DELETE FROM token_stats")
+            self.__db.execute("DELETE FROM index_metadata")
+            self.__db.executemany(
+                "INSERT INTO reverse_key(hash_id, chunk_id, token, frequency) "
+                "VALUES (?, ?, ?, ?)", rows
+            )
+            self.__db.executemany(
+                "INSERT INTO chunk_tokens(hash_id, chunk_id, token, "
+                "frequency) "
+                "VALUES (?, ?, ?, ?)", rows
+            )
+            self.__db.executemany(
+                "INSERT INTO token_stats(token, chunk_frequency) "
+                "VALUES (?, ?)",
+                token_stats.items(),
+            )
+            total_chunks = self.__db.execute(
+                "SELECT COUNT(*) FROM chunks"
+            ).fetchone()[0]
+            self.__db.execute(
+                "INSERT INTO index_metadata(id, total_chunks) VALUES (1, ?)",
+                (total_chunks,),
+            )
 
     def load_bm25_index(self) -> dict[str, dict[tuple[str, int], int]]:
         """
@@ -216,6 +272,79 @@ class DataBaseHandler:
         for token, hash_id, chunk_id, frequency in rows:
             index.setdefault(token, {})[(hash_id, chunk_id)] = frequency
         return index
+
+    def load_bm25_data(
+            self,
+            ) -> tuple[
+                dict[str, dict[tuple[str, int], int]],
+                dict[str, int],
+                dict[tuple[str, int], int],
+                int,
+            ]:
+        """Load all persisted data required to calculate BM25 scores."""
+        index = self.load_bm25_index()
+        stats = {
+            token: frequency for token, frequency in self.__db.execute(
+                "SELECT token, chunk_frequency FROM token_stats"
+            ).fetchall()
+        }
+        lengths = {
+            (hash_id, chunk_id): length
+            for hash_id, chunk_id, length in self.__db.execute(
+                "SELECT hash_id, chunk_id, SUM(frequency) "
+                "FROM chunk_tokens GROUP BY hash_id, chunk_id"
+            ).fetchall()
+        }
+        row = self.__db.execute(
+            "SELECT total_chunks FROM index_metadata WHERE id = 1"
+        ).fetchone()
+        return index, stats, lengths, 0 if row is None else row[0]
+
+    def synchronize_corpus(self, corpus: Path) -> bool:
+        """Remove deleted files and report whether indexing is required."""
+        actual_paths = {
+            path.resolve() for path in corpus.rglob("*")
+            if path.is_file() and path.suffix in {".py", ".md"}
+        }
+        stored_rows = self.__db.execute(
+            "SELECT hash_id, path, modified_timestamp FROM files"
+        ).fetchall()
+        stored_paths = {Path(row[1]).resolve(): row for row in stored_rows}
+        deleted = [row[0] for path, row in stored_paths.items()
+                   if path not in actual_paths]
+        changed = bool(deleted)
+        with self.__db:
+            for hash_id in deleted:
+                self.__db.execute(
+                    "DELETE FROM files WHERE hash_id = ?", (hash_id,)
+                )
+            if deleted:
+                self.__refresh_bm25_metadata()
+
+        for path in actual_paths:
+            if self.check_file_modified(path):
+                changed = True
+            elif path in stored_paths:
+                metadata = stored_paths[path]
+                if path.stat().st_mtime != metadata[2]:
+                    self.update_file_metadata(path)
+        return changed
+
+    def __refresh_bm25_metadata(self) -> None:
+        """Rebuild aggregate BM25 statistics from persisted token rows."""
+        self.__db.execute("DELETE FROM token_stats")
+        self.__db.execute(
+            "INSERT INTO token_stats(token, chunk_frequency) "
+            "SELECT token, COUNT(*) FROM chunk_tokens GROUP BY token"
+        )
+        total_chunks = self.__db.execute(
+            "SELECT COUNT(*) FROM chunks"
+        ).fetchone()[0]
+        self.__db.execute("DELETE FROM index_metadata")
+        self.__db.execute(
+            "INSERT INTO index_metadata(id, total_chunks) VALUES (1, ?)",
+            (total_chunks,),
+        )
 
     def get_all_chunks(self) -> list[Chunk]:
         """Return every currently stored chunk."""
