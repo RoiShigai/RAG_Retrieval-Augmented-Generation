@@ -2,6 +2,8 @@ from typing import List, Optional
 from dataclasses import dataclass, field
 import re
 
+from .TokenNormalizer import tokenize_text
+
 
 @dataclass
 class MarkdownSection:
@@ -14,17 +16,17 @@ class MarkdownSection:
 
 
 class MarkDownTokenizer:
-    __TOKEN_PATTERN = re.compile(r"\w+")
     __HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$")
     __FENCE_RE = re.compile(r"^[ \t]*(```+|~~~+)")
 
     def tokenize(self, source: str) -> List[str]:
-        source = self.__clean_markdown(source)
-
-        return [
-            token.lower()
-            for token in self.__TOKEN_PATTERN.findall(source)
-        ]
+        raw_tokens = tokenize_text(source)
+        cleaned_tokens = tokenize_text(self.__clean_markdown(source))
+        result = list(raw_tokens)
+        for token in cleaned_tokens:
+            if token not in result:
+                result.append(token)
+        return result
 
     def parse(self, source: str) -> List[MarkdownSection]:
         """
@@ -33,7 +35,7 @@ class MarkDownTokenizer:
         """
         sections: List[MarkdownSection] = []
         lines = source.splitlines(keepends=True)
-        stack = list = []
+        stack: List[MarkdownSection] = []
 
         offset = 0
         in_fence = False

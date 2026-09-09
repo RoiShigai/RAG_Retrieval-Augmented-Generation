@@ -2,6 +2,12 @@ from ..Tokenizer.MarkDownTokenizer import MarkDownTokenizer
 from ..Tokenizer.MarkDownTokenizer import MarkdownSection
 from ..Chunk import Chunk, IdGenerator, ChunkType
 from .FileChunker import FileChunker
+from ..RangeSplitter import split_source_ranges
+from ..Tokenizer.TokenNormalizer import (
+    add_context_tokens,
+    tokenize_range,
+    tokenize_text,
+)
 from pathlib import Path
 from typing import List
 
@@ -26,6 +32,15 @@ class MarkDownChunker(FileChunker):
         source = path.read_text(encoding="utf-8")
         sections = self.__tokenizer.parse(source)
         chunks: List[Chunk] = []
+
+        if not sections:
+            return self.__source_chunks(
+                path, source, 0, len(source), None, None
+            )
+        if sections[0].start > 0:
+            chunks.extend(self.__source_chunks(
+                path, source, 0, sections[0].start, sections[0], None
+            ))
 
         for section in sections:
             if section.parent is not None:
@@ -94,6 +109,9 @@ class MarkDownChunker(FileChunker):
                 )
                 content_start = child.start
             else:
+                chunks.extend(self.__source_chunks(
+                    path, source, content_start, child.start, section, None
+                ))
                 chunks.extend(
                     self.__chunk_section(
                         path,
@@ -119,7 +137,7 @@ class MarkDownChunker(FileChunker):
         current: MarkdownSection | None = section
 
         while current is not None:
-            path.append(current.title)
+            path.append(current.tittle)
             current = current.parent
         path.reverse()
 
@@ -138,6 +156,7 @@ class MarkDownChunker(FileChunker):
         """
         Return a chunk with the actual data
         """
+        heading_tokens = tokenize_text(" ".join(self.__heading_path(section)))
         return Chunk(
             id=self.__id_generator.next(),
             file_path=path,
@@ -145,7 +164,9 @@ class MarkDownChunker(FileChunker):
             end=end,
             chunk_type=chunk_type,
             parent_id=parent_id,
-            tokens=tokens
+            tokens=add_context_tokens(
+                [*heading_tokens, *tokens], path.name, "", "markdown"
+            )
             )
 
     def __source_chunks(
@@ -154,24 +175,23 @@ class MarkDownChunker(FileChunker):
             source: str,
             start: int,
             end: int,
-            section: MarkdownSection,
+            section: MarkdownSection | None,
             parent_id: int | None) -> List[Chunk]:
         """Split an oversized Markdown leaf on lines and characters."""
         chunks: List[Chunk] = []
-        current = start
-        for line in source[start:end].splitlines(keepends=True):
-            line_end = current + len(line)
-            for chunk_start in range(current, line_end, self.__max_chunk_size):
-                chunk_end = min(chunk_start + self.__max_chunk_size, line_end)
-                chunks.append(self.__create_chunk(
-                    path,
-                    section,
-                    source[chunk_start:chunk_end],
-                    ChunkType.MARKDOWN_SECTION,
-                    self.__tokenizer.tokenize(source[chunk_start:chunk_end]),
-                    parent_id,
-                    chunk_start,
-                    chunk_end
-                ))
-            current = line_end
+        for chunk_start, chunk_end in split_source_ranges(
+                source, start, end, self.__max_chunk_size):
+            current_section = section
+            if current_section is None:
+                current_section = MarkdownSection("", 0, start, end)
+            chunks.append(self.__create_chunk(
+                path,
+                current_section,
+                source[chunk_start:chunk_end],
+                ChunkType.MARKDOWN_SECTION,
+                tokenize_range(source, chunk_start, chunk_end),
+                parent_id,
+                chunk_start,
+                chunk_end
+            ))
         return chunks

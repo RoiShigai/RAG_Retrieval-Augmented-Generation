@@ -8,7 +8,7 @@ def test_tokenize_01():
         "test_variable"
     )
 
-    assert ["test", "variable"] == result
+    assert ["test_variable", "test", "variable"] == result
 
 
 def test_tokenize_02():
@@ -42,7 +42,10 @@ def test_tokenize_05():
         "this56 a string67 that 555 is being tested"
     )
 
-    assert ["this56", "a", "string67", "that", "555", "is", "being", "tested"] == result
+    assert [
+        "this56", "a", "string67", "that", "555", "is", "being",
+        "tested",
+    ] == result
 
 
 def test_python_tokenizer_01():
@@ -59,6 +62,23 @@ def test_python_tokenizer_02():
         "x = 42"
     )
     assert ["x", "42"] == result
+
+
+def test_python_file_tokenizer_keeps_numbers_and_strings() -> None:
+    tokenizer = PythonTokenizer()
+    source = (
+        'value = 42\nmessage = "searchable message"\n'
+    )
+    offsets = [0]
+    for line in source.splitlines(keepends=True):
+        offsets.append(offsets[-1] + len(line))
+
+    tokenizer.tokenize_file(source, offsets)
+
+    tokens = tokenizer.tokens_for_range(0, len(source))
+    assert "42" in tokens
+    assert "searchable" in tokens
+    assert "message" in tokens
 
 
 def test_python_tokenizer_03():

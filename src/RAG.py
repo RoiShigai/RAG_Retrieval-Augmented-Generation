@@ -7,6 +7,7 @@ from typing import List, cast
 
 from .Algorithm.Match import ChunkKey
 from .Model import MinimalSource
+from .Indexor.Chunker.Tokenizer.TokenNormalizer import tokenize_text
 
 
 class RagError(Exception):
@@ -88,7 +89,7 @@ class RAG:
             k: int) -> list[MinimalSource]:
         """Return source locations matching the query."""
         self.__synchronize()
-        matches = self.__bm25.search(query.split(), k)
+        matches = self.__bm25.search(tokenize_text(query), k)
         sources: list[MinimalSource] = []
         for chunk_key, _score in matches:
             if not isinstance(chunk_key, tuple):

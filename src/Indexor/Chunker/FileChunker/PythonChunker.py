@@ -1,9 +1,12 @@
 from ..Chunk import Chunk, IdGenerator, ChunkType
 from ..Tokenizer.PythonTokenizer import PythonTokenizer
 from .FileChunker import FileChunker
+from ..RangeSplitter import split_source_ranges
 from typing import List, Tuple
 from pathlib import Path
 import ast
+
+from ..Tokenizer.TokenNormalizer import add_context_tokens
 
 
 class PythonChunker(FileChunker):
@@ -93,7 +96,9 @@ class PythonChunker(FileChunker):
                     file_path=path,
                     start=start,
                     end=end,
-                    tokens=tokens,
+                    tokens=add_context_tokens(
+                        tokens, path.name, "function"
+                    ),
                     chunk_type=ChunkType.PYTHON_FUNCTION,
                     parent_id=parent_id
                 )
@@ -172,7 +177,9 @@ class PythonChunker(FileChunker):
                     file_path=file_path,
                     start=start,
                     end=end,
-                    tokens=tokens,
+                    tokens=add_context_tokens(
+                        tokens, file_path.name, "class"
+                    ),
                     chunk_type=ChunkType.PYTHON_CLASS,
                     parent_id=parent_id
                 )
@@ -261,43 +268,38 @@ class PythonChunker(FileChunker):
                 file_path=path,
                 start=start,
                 end=end,
-                tokens=self.__tokenizer.tokens_for_range(start, end),
+                tokens=add_context_tokens(
+                    self.__tokenizer.tokens_for_range(start, end),
+                    path.name,
+                    "class" if chunk_type == ChunkType.PYTHON_CLASS_PART
+                    else "function",
+                ),
                 chunk_type=chunk_type,
                 parent_id=parent_id
             )]
 
         chunks: List[Chunk] = []
-        current = start
-        for line in source[start:end].splitlines(keepends=True):
-            line_end = current + len(line)
-            for chunk_start in range(current, line_end, self.__max_chunk_size):
-                chunk_end = min(chunk_start + self.__max_chunk_size, line_end)
-                chunks.append(Chunk(
-                    id=self.__id_generator.next(),
-                    file_path=path,
-                    start=chunk_start,
-                    end=chunk_end,
-                    tokens=self.__tokenizer.tokens_for_range(
+        kind = (
+            "class" if chunk_type == ChunkType.PYTHON_CLASS_PART
+            else "function"
+        )
+        for chunk_start, chunk_end in split_source_ranges(
+                source, start, end, self.__max_chunk_size):
+            chunks.append(Chunk(
+                id=self.__id_generator.next(),
+                file_path=path,
+                start=chunk_start,
+                end=chunk_end,
+                tokens=add_context_tokens(
+                    self.__tokenizer.tokens_for_range(
                         chunk_start, chunk_end
                     ),
-                    chunk_type=chunk_type,
-                    parent_id=parent_id
-                ))
-            current = line_end
-        if current < end:
-            for chunk_start in range(current, end, self.__max_chunk_size):
-                chunk_end = min(chunk_start + self.__max_chunk_size, end)
-                chunks.append(Chunk(
-                    id=self.__id_generator.next(),
-                    file_path=path,
-                    start=chunk_start,
-                    end=chunk_end,
-                    tokens=self.__tokenizer.tokens_for_range(
-                        chunk_start, chunk_end
-                    ),
-                    chunk_type=chunk_type,
-                    parent_id=parent_id
-                ))
+                    path.name,
+                    kind,
+                ),
+                chunk_type=chunk_type,
+                parent_id=parent_id
+            ))
         return chunks
 
     def __statement_children(
@@ -366,6 +368,8 @@ class PythonChunker(FileChunker):
             offset: List[int],
             node: ast.stmt) -> Tuple[int, int]:
         """ Return the start and end char position of the node """
+        if node.end_lineno is None or node.end_col_offset is None:
+            raise ValueError("AST node has no end position")
         start = self.__get_offset(offset, node.lineno, node.col_offset)
         end = self.__get_offset(offset, node.end_lineno, node.end_col_offset)
 

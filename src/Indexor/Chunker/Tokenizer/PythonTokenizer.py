@@ -2,10 +2,12 @@ from typing import List
 from bisect import bisect_left
 from dataclasses import dataclass
 import io
-import re
 import tokenize
 import keyword
 import textwrap
+from tokenize import TokenInfo
+
+from .TokenNormalizer import normalize_identifier, tokenize_text
 
 
 @dataclass
@@ -32,64 +34,17 @@ class PythonTokenizer:
         tokens = tokenize.generate_tokens(io.StringIO(source).readline)
 
         for token in tokens:
-            if token.type == tokenize.NAME:
-                if not keyword.iskeyword(token.string):
-                    values = self._tokenize_identifier(token.string)
-                    start = self.__get_offset(
-                        offsets,
-                        token.start[0],
-                        token.start[1]
-                    )
-                    end = self.__get_offset(
-                        offsets,
-                        token.end[0],
-                        token.end[1]
-                    )
-                    for value in values:
-                        self.__tokens.append(
-                            PythonToken(
-                                start=start,
-                                end=end,
-                                value=value
-                            )
-                        )
-                elif token.type == tokenize.NUMBER:
-                    start = self.__get_offset(
-                        offsets,
-                        token.start[0],
-                        token.start[1]
-                    )
-                    end = self.__get_offset(
-                        offsets,
-                        token.end[0],
-                        token.end[1]
-                    )
-                    self.__tokens.append(
-                        PythonToken(
-                            start=start,
-                            end=end,
-                            value=token.string
-                        )
-                    )
-                elif token.type == tokenize.STRING:
-                    start = self.__get_offset(
-                        offsets,
-                        token.start[0],
-                        token.start[1]
-                    )
-                    end = self.__get_offset(
-                        offsets,
-                        token.end[0],
-                        token.end[1]
-                    )
-                    for value in self.__tokenize_string(token.string):
-                        self.__tokens.append(
-                            PythonToken(
-                                start=start,
-                                end=end,
-                                value=value
-                            )
-                        )
+            if token.type == tokenize.NAME and not keyword.iskeyword(
+                    token.string):
+                self.__append_tokens(
+                    normalize_identifier(token.string), token, offsets
+                )
+            elif token.type == tokenize.NUMBER:
+                self.__append_tokens([token.string.lower()], token, offsets)
+            elif token.type == tokenize.STRING:
+                self.__append_tokens(
+                    tokenize_text(token.string), token, offsets
+                )
         self.__token_starts = [
             token.start
             for token in self.__tokens
@@ -116,19 +71,15 @@ class PythonTokenizer:
             for token in tokens:
                 if token.type == tokenize.NAME:
                     if not keyword.iskeyword(token.string):
-                        result.extend(
-                            self._tokenize_identifier(token.string)
-                        )
+                        result.extend(normalize_identifier(token.string))
                 elif token.type == tokenize.NUMBER:
                     result.append(token.string)
                 elif token.type == tokenize.STRING:
-                    result.extend(
-                        self._tokenize_string(token.string)
-                    )
+                    result.extend(tokenize_text(token.string))
         except IndentationError as e:
-                print("\n========== TOKENIZATION ERROR ==========")
-                print(repr(e))
-                print("========================================\n")
+            print("\n========== TOKENIZATION ERROR ==========")
+            print(repr(e))
+            print("========================================\n")
         try:
             tokens = tokenize.tokenize(
                 io.BytesIO(source.encode("utf-8")).readline
@@ -180,9 +131,10 @@ class PythonTokenizer:
 
         while index < len(self.__tokens):
             token = self.__tokens[index]
-            if token.end > end:
+            if token.start >= end:
                 break
-            result.append(token.value)
+            if token.end > start:
+                result.append(token.value)
             index += 1
         return result
 
@@ -200,23 +152,7 @@ class PythonTokenizer:
         Return:
             List[str]: List of str containing the identifier and his token.
         """
-        result: List[str] = [identifier]
-
-        parts: List[str] = [
-            part
-            for part in identifier.split("_")
-            if part
-        ]
-        for part in parts:
-            result.append(part)
-            if self.__is_camel_case(part):
-                result.extend(
-                    re.findall(
-                        r"[A-Z](?:[a-z-0-9]+|[A-Z]*(?=[A-Z]|$))",
-                        part
-                    )
-                )
-        return result
+        return normalize_identifier(identifier)
 
     def _tokenize_string(self, string: str) -> List[str]:
         """
@@ -232,25 +168,20 @@ class PythonTokenizer:
         Return:
             List[str]: List of str containing the string and its token.
         """
-        result: List[str] = []
+        return tokenize_text(string)
 
-        splitted = string.split()
-        for token in splitted:
-            result.append(token)
-            if '_' in token:
-                result.extend(self.__tokenize_snake_case(token))
-            if '-' in token:
-                result.extend(self.__tokenize_dash(token))
-            if '.' in token:
-                result.extend(self.__tokenize_dot(token))
-            if self.__is_camel_case(token):
-                result.extend(
-                    re.findall(
-                        r"[A-Z](?:[a-z-0-9]+|[A-Z]*(?=[A-Z]|$))",
-                        token
-                    )
-                )
-        return result
+    def __append_tokens(
+            self,
+            values: List[str],
+            token: TokenInfo,
+            offsets: List[int]) -> None:
+        """Append normalized values with their source range."""
+        start = self.__get_offset(offsets, token.start[0], token.start[1])
+        end = self.__get_offset(offsets, token.end[0], token.end[1])
+        self.__tokens.extend(
+            PythonToken(start=start, end=end, value=value)
+            for value in values
+        )
 
     def __get_offset(self, offsets: List[int], line: int, column: int) -> int:
         """ Return the char position of the beginning statement """

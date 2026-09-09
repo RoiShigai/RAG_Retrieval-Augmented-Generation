@@ -21,3 +21,17 @@ def test_search_returns_minimal_sources(tmp_path: Path) -> None:
     assert results[0].last_character_index == len(
         source.read_text(encoding="utf-8")
     )
+
+
+def test_search_normalizes_user_query(tmp_path: Path) -> None:
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    source = corpus / "sample.md"
+    source.write_text("# title\nSearchable_Value text\n", encoding="utf-8")
+
+    rag = RAG(tmp_path / "index.db", corpus)
+    rag.index()
+    results = rag.search("SEARCHABLE-VALUE!", 1)
+
+    assert len(results) == 1
+    assert results[0].file_path == str(source.resolve())

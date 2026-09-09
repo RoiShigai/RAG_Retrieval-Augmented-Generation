@@ -2,6 +2,8 @@ from ..Indexor.Chunker.Chunk import Chunk
 from typing import List, Tuple
 import math
 
+from ..Indexor.Chunker.Tokenizer.TokenNormalizer import tokenize_text
+
 ChunkKey = int | tuple[str, int]
 
 
@@ -14,12 +16,23 @@ class BM25Index:
         the right chunks using an inverted tokens index.
     """
 
-    def __init__(self, k1: float = 1.2, b: float = 0.75) -> None:
+    __STOPWORDS = {
+        "a", "an", "and", "are", "as", "at", "be", "by", "for",
+        "from", "in", "is", "it", "of", "on", "or", "that", "the",
+        "this", "to", "was", "were", "with",
+    }
+
+    def __init__(
+            self,
+            k1: float = 1.2,
+            b: float = 0.75,
+            exact_match_boost: float = 1.15) -> None:
         """
         Init method of the BM25 algorithm
         """
         self.k1: float = k1
         self.b: float = b
+        self.exact_match_boost: float = exact_match_boost
         self.inverted_index: dict[str, dict[ChunkKey, int]] = {}
         self.chunk_length: dict[ChunkKey, int] = {}
         self.chunk_count: int = 0
@@ -36,9 +49,10 @@ class BM25Index:
             chunk_count: int,
             k1: float = 1.2,
             b: float = 0.75,
+            exact_match_boost: float = 1.15,
             ) -> "BM25Index":
         """Build a BM25 index from statistics stored in the database."""
-        index = cls(k1, b)
+        index = cls(k1, b, exact_match_boost)
         index.inverted_index = inverted_index
         index.chunk_length = chunk_length
         index.chunk_count = chunk_count
@@ -107,7 +121,9 @@ class BM25Index:
         """
         Calculate the final BM25 score for a given User query
         """
-        query_tokens = list(dict.fromkeys(query_tokens))
+        query_tokens = list(dict.fromkeys(
+            tokenize_text(" ".join(query_tokens))
+        ))
         candidates = self.__get_candidates(query_tokens)
         scores: dict[ChunkKey, float] = {}
 
@@ -171,7 +187,10 @@ class BM25Index:
                 )
             )
         )
-        return idf * numerator / denominator
+        score = idf * numerator / denominator
+        if token not in self.__STOPWORDS:
+            score *= self.exact_match_boost
+        return score
 
     def __get_candidates(self, query_tokens: List[str]) -> set[ChunkKey]:
         """
