@@ -47,7 +47,7 @@ Mardown Files if well structured are easy to chunks, we can separate each part u
 
 ### Python files
 
-Python files are chunked using another technique for demonstration. The algorithm choosed is based on the builtin python ast to improve semantic and python code chunking. each Class are chunked into Class part, respecting method definition and each functions defintion are dispatch into their respective chunks. If the max chunk size value is to low then it authorized token split and function/class definition splitting. Into each Chunks token list, the tokens "class", "function" are injected to improve chance to get the right type of chunks from the user request. ex: "which class contain the method to setup vllm ?". 
+Python files are chunked using another technique for demonstration. The algorithm choosed is based on the builtin python AST to improve semantic and python code chunking. each Class are chunked into Class part, respecting method definition and each functions defintion are dispatch into their respective chunks. If the max chunk size value is to low then it authorized token split and function/class definition splitting. Into each Chunks token list, the tokens "class", "function" are injected to improve chance to get the right type of chunks from the user request. ex: "which class contain the method to setup vllm ?". 
 
 # Resources
 - [cAST Paper](https://arxiv.org/abs/2506.15655?utm_source=chatgpt.com): Research Paper by 'Yilin Zhan' for Code retrieval Strategy

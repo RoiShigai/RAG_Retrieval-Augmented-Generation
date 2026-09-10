@@ -4,10 +4,10 @@ from .Algorithm import BM25Index
 from .DataHandler.DatabaseHandler.DataBaseHandler import DataBaseHandler
 from pathlib import Path
 from typing import List, cast
-
 from .Algorithm.Match import ChunkKey
-from .Model import MinimalSource
+from .Model import MinimalSource, MinimalSearchResults
 from .Indexor.Chunker.Tokenizer.TokenNormalizer import tokenize_text
+from .Helper import create_json_file, load_json_file
 
 
 class RagError(Exception):
@@ -105,8 +105,37 @@ class RAG:
     def search_dataset(
             self,
             dataset_path: Path,
-            k: int, save_directory: Path) -> None:
-        ...
+            k: int, save_directory: Path = "data/dataset") -> None:
+        """
+            Read a given dataset containing User request and
+                search the top K chunks to answers each request and
+                return a list of MinimalSearchResults
+
+            Parameters:
+                dataset_path: Path | the file path to the file containing
+                    the user request
+                k: int | the number of chunks retrieved to answer a question
+                save_directory: Path | Path to the folder where
+        """
+        sources: List[MinimalSource] = []
+        answers: List[MinimalSearchResults] = []
+        dataset: dict = load_json_file(dataset_path)
+
+        for id, request in dataset.items():
+            sources = self.search(request, k)
+            answers.append(
+                    MinimalSearchResults.model_construct(
+                        question_id=str(id),
+                        question=request,
+                        retrieved_sources=sources
+                        )
+                    )
+            sources.clear()
+        create_json_file(
+                Path(f"{save_directory}/dataset_search.json"),
+                answers
+            )
+
 
     def answer(
             self,
