@@ -104,8 +104,8 @@ class RAG:
 
     def search_dataset(
             self,
-            dataset_path: str,
-            k: int, save_directory: str) -> None:
+            dataset_path: Path,
+            k: int, save_directory: Path) -> None:
         ...
 
     def answer(
