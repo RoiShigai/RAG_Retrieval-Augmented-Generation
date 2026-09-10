@@ -2,6 +2,7 @@ from .Chunker.FileChunker.MarkDownChunker import MarkDownChunker
 from .Chunker.FileChunker.PythonChunker import PythonChunker
 from .Chunker.Chunk import IdGenerator, Chunk
 from ..DataHandler.DatabaseHandler.DataBaseHandler import DataBaseHandler
+from tqdm import tqdm
 from typing import List
 from pathlib import Path
 
@@ -68,13 +69,20 @@ class Indexor:
                 )
                 self.__id_generator.reset()
                 chunks = self.__chunker[path.suffix].chunk(path)
-                for chunk in chunks:
+                chunk_len = len(chunks)
+
+                for chunk in tqdm(
+                    iter(chunks), total=chunk_len,
+                    bar_format="{n_fmt}/{chunk_len} | {l_bar}{bar}",
+                    leave=False, desc="Creating new chunks for Database"):
                     print(chunk)
                     chunk.file_path_hash = path_hash
                     chunk.file_content_hash = content_hash
                     fresh_chunks[(path_hash, chunk.id)] = chunk
+
                 self.__database.update_file_metadata(path)
                 self.__database.replace_file_chunks(path, chunks)
+
             elif metadata is not None and path.stat().st_mtime != metadata[
                     "modified_timestamp"]:
                 self.__database.update_file_metadata(path)
