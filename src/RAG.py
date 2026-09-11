@@ -5,7 +5,7 @@ from .DataHandler.DatabaseHandler.DataBaseHandler import DataBaseHandler
 from pathlib import Path
 from typing import List, cast
 from .Algorithm.Match import ChunkKey
-from .Model import MinimalSource, MinimalSearchResults
+from .Model import MinimalSource, MinimalSearchResults, MinimalAnswer
 from .Indexor.Chunker.Tokenizer.TokenNormalizer import tokenize_text
 from .Helper import create_json_file, load_json_file
 
@@ -132,17 +132,21 @@ class RAG:
                     )
             sources.clear()
         create_json_file(
-                Path(f"{save_directory}/dataset_search.json"),
+                Path(f"{save_directory}/StudentSearchResult.json"),
                 answers
             )
-
 
     def answer(
             self,
             query: str,
             k: int) -> None:
-        """Synchronize the corpus before generating an answer."""
-        self.__synchronize()
+        """
+            Generate an Answer to a User Query with SLM using
+                the contest retrieved for this question.
+        """
+        search_result = self.search(query, k)
+        answer = self.__generate_answer(search_result, query)
+        print(answer)
 
     def answer_dataset(
             self,
@@ -165,3 +169,15 @@ class RAG:
         print("[DATABASE INDEX DEBUGGING]")
         for k, v in reverse_index_db.items():
             print(f"key: {k}: value: {v}")
+
+    def __generate_answer(
+            self,
+            search_result: List[MinimalSource],
+            query: str) -> MinimalAnswer:
+        """
+            Generate a MinimalAnswer Object with the retrieved Source
+                for a given query
+        """
+        model = SLM()
+        answer = model.generate_response(search_result, query)
+        return answer
