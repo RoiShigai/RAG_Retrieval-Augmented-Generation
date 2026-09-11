@@ -8,6 +8,7 @@ from .Algorithm.Match import ChunkKey
 from .Model import MinimalSource, MinimalSearchResults, MinimalAnswer
 from .Indexor.Chunker.Tokenizer.TokenNormalizer import tokenize_text
 from .Helper import create_json_file, load_json_file
+from .SLM import SLM
 
 
 class RagError(Exception):
