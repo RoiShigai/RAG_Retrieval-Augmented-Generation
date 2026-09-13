@@ -1,5 +1,6 @@
 from llm_sdk import Small_LLM_Model
 from ..Model import MinimalAnswer, MinimalSource
+from ..Helper import retrieve_text_from_source
 from typing import List
 
 
@@ -23,20 +24,20 @@ class SLM:
         self.__model: Small_LLM_Model = model
         self.__max_token: int = max_token
         self.__pre_prompt: str = (
-                "<|im_start|>system\n" \
-                "You are an helpfull and accurate AI assistant." \
-                "Your task is to answer the UserRequest using only the" \
+                "<|im_start|>system\n"
+                "You are an helpfull and accurate AI assistant."
+                "Your task is to answer the UserRequest using only the"
                 " factual informations provided in the context below.\n"
                 "# RULES:\n"
-                "1. Grounding: Do not use any outside knowledge or assumption." \
-                " If the answer cannot be found in the context, state: '" \
-                "I cannot respond with the provided documents'.\n" \
-                "2. Citation: Cite the specific source or documentation" \
-                "title when stating a fact.\n" \
-                "3. Tone: Be concise, clear and professional." \
-                " Do not speculate or exptrapolate beyond the text." \
-                "# RETRIVED CONTEXT"
-                )
+                "1. Grounding: Do not use any outside knowledge or assumption."
+                " If the answer cannot be found in the context, state: '"
+                "I cannot respond with the provided documents'.\n"
+                "2. Citation: Cite the specific source or documentation"
+                "title when stating a fact.\n"
+                "3. Tone: Be concise, clear and professional."
+                " Do not speculate or exptrapolate beyond the text."
+                "# RETRIVED CONTEXT\n"
+            )
 
     def generate_response(
             search_result: List[MinimalSource],
@@ -52,3 +53,15 @@ class SLM:
             Return:
                 MinimalAnswer
         """
+
+    def __build_prompt(self, query: str, context: List[MinimalSource]) -> str:
+        """ Generate the correct prompt for the SLM Answer generation """
+        context: str = ""
+
+        for i, source in enumerate(context):
+            context += (
+                    f"SOURCE {i}:\n"
+                    f"File: {source.file_path}"
+                    f"{retrieve_text_from_source(source)}\n\n"
+                )
+        return f"{self.__pre_prompt}{context}\n\n#UserQuery: {query}\n# ANSWER: "
