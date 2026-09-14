@@ -1,4 +1,4 @@
-from .RAG import RAG
+from RAG import RAG
 from pathlib import Path
 import fire
 import sys
@@ -72,8 +72,6 @@ def test() -> None:
     #rag.debug_db()
 
 
-try:
-    fire.Fire()
-except (Exception, KeyboardInterrupt) as e:
-    print(f"Catch {type(e).__name__}: {e}")
-    sys.exit()
+fire.Fire()
+#print(f"Catch {type(e).__name__}: {e}")
+#sys.exit()

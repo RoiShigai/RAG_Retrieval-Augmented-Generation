@@ -7,6 +7,7 @@ requires-python = ">=3.14"
 dependencies = [
     "fire>=0.7.1",
     "flake8>=7.3.0",
+    "llm-sdk",
     "mypy>=2.3.1",
     "pydantic>=2.13.4",
     "pytest>=9.1.1",
@@ -15,7 +16,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-llm_sdk = {path="./src/llm_sdk", editable = true}
+llm-sdk = {path="llm_sdk", editable = true}
 
 [tool.mypy]
 exclude = [

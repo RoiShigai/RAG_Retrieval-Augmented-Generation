@@ -1,14 +1,15 @@
-from .Indexor.Chunker.Chunk import Chunk
-from .Indexor.Indexor import Indexor
-from .Algorithm import BM25Index
-from .DataHandler.DatabaseHandler.DataBaseHandler import DataBaseHandler
+from Indexor.Chunker.Chunk import Chunk
+from Indexor.Indexor import Indexor
+from Algorithm import BM25Index
+from DataHandler.DatabaseHandler.DataBaseHandler import DataBaseHandler
 from pathlib import Path
 from typing import List, cast
-from .Algorithm.Match import ChunkKey
-from .Model import MinimalSource, MinimalSearchResults, MinimalAnswer
-from .Indexor.Chunker.Tokenizer.TokenNormalizer import tokenize_text
-from .Helper import create_json_file, load_json_file
-from .SLM import SLM
+from Algorithm.Match import ChunkKey
+from Model import MinimalSource, MinimalSearchResults, MinimalAnswer
+from Indexor.Chunker.Tokenizer.TokenNormalizer import tokenize_text
+from Helper import create_json_file, load_json_file
+from SLM import SLM
+from llm_sdk import Small_LLM_Model
 
 
 class RagError(Exception):
@@ -35,27 +36,6 @@ class RAG:
             raise NotADirectoryError(self.__corpus)
         self.__database = DataBaseHandler(database)
         self.__bm25 = self.__load_bm25()
-
-    def __load_bm25(self) -> BM25Index:
-        """Load the persisted BM25 index."""
-        index, stats, lengths, count = self.__database.load_bm25_data()
-        return BM25Index.from_persisted(
-            cast(dict[str, dict[ChunkKey, int]], index),
-            stats,
-            cast(dict[ChunkKey, int], lengths),
-            count,
-        )
-
-    def __synchronize(self) -> None:
-        """Synchronize the corpus and reload BM25 when it changes."""
-        changed = self.__database.synchronize_corpus(self.__corpus)
-        if changed:
-            chunks = Indexor(self.__database).generate_chunks(self.__corpus)
-            created = BM25Index().create_index(chunks)
-            self.__database.store_bm25_index(
-                cast(dict[str, dict[tuple[str, int], int]], created)
-            )
-            self.__bm25 = self.__load_bm25()
 
     def index(
             self,
@@ -146,6 +126,7 @@ class RAG:
                 the contest retrieved for this question.
         """
         search_result = self.search(query, k)
+        #print(search_result)
         answer = self.__generate_answer(search_result, query)
         print(answer)
 
@@ -160,6 +141,27 @@ class RAG:
             student_search_results_path: str,
             dataset_path: str) -> None:
         ...
+
+    def __load_bm25(self) -> BM25Index:
+        """Load the persisted BM25 index."""
+        index, stats, lengths, count = self.__database.load_bm25_data()
+        return BM25Index.from_persisted(
+            cast(dict[str, dict[ChunkKey, int]], index),
+            stats,
+            cast(dict[ChunkKey, int], lengths),
+            count,
+        )
+
+    def __synchronize(self) -> None:
+        """Synchronize the corpus and reload BM25 when it changes."""
+        changed = self.__database.synchronize_corpus(self.__corpus)
+        if changed:
+            chunks = Indexor(self.__database).generate_chunks(self.__corpus)
+            created = BM25Index().create_index(chunks)
+            self.__database.store_bm25_index(
+                cast(dict[str, dict[tuple[str, int], int]], created)
+            )
+            self.__bm25 = self.__load_bm25()
 
     def debug_db(self) -> None:
         """ Debug function to check what is stored into the db """
@@ -179,6 +181,6 @@ class RAG:
             Generate a MinimalAnswer Object with the retrieved Source
                 for a given query
         """
-        model = SLM()
+        model = SLM(Small_LLM_Model())
         answer = model.generate_response(search_result, query)
         return answer

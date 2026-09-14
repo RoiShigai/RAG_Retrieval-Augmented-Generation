@@ -1,7 +1,7 @@
 from .Chunker.FileChunker.MarkDownChunker import MarkDownChunker
 from .Chunker.FileChunker.PythonChunker import PythonChunker
 from .Chunker.Chunk import IdGenerator, Chunk
-from ..DataHandler.DatabaseHandler.DataBaseHandler import DataBaseHandler
+from DataHandler.DatabaseHandler.DataBaseHandler import DataBaseHandler
 from tqdm import tqdm
 from typing import List
 from pathlib import Path

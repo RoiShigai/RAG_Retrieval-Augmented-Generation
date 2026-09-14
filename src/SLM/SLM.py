@@ -1,6 +1,6 @@
 from llm_sdk import Small_LLM_Model
-from ..Model import MinimalAnswer, MinimalSource, MinimalSearchResults
-from ..Helper import retrieve_text_from_source
+from Model import MinimalSource
+from Helper import retrieve_text_from_source
 from typing import List
 import torch
 
@@ -46,8 +46,8 @@ class SLM:
 
     def generate_response(
             self,
-            search_result: MinimalSearchResults,
-            query: str) -> MinimalAnswer:
+            search_result: List[MinimalSource],
+            query: str) -> str:
         """
             Generate a formatted response using the retrieved context
                 given by the search result for the given query.
@@ -57,20 +57,14 @@ class SLM:
                 query: str | the user query to answer
 
             Return:
-                MinimalAnswer
+                str
         """
         prompt: str = self.__build_prompt(
                 query,
-                search_result.retrieved_sources
+                search_result
             )
         answer: str = self.__generate(prompt)
-
-        return MinimalAnswer(
-                question_id=search_result.question_id,
-                question=query,
-                retrieved_sources=search_result.retrieved_sources,
-                answer=answer
-            )
+        return answer
 
     def __generate(self, prompt: str) -> str:
         """

@@ -1,8 +1,8 @@
-from ..Indexor.Chunker.Chunk import Chunk
+from Indexor.Chunker.Chunk import Chunk
 from typing import List, Tuple
 import math
 
-from ..Indexor.Chunker.Tokenizer.TokenNormalizer import tokenize_text
+from Indexor.Chunker.Tokenizer.TokenNormalizer import tokenize_text
 
 ChunkKey = int | tuple[str, int]
 

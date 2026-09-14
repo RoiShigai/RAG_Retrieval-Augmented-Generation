@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+from Indexor import Chunk, ChunkType
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
-if TYPE_CHECKING:
-    from ...Indexor.Chunker.Chunk import Chunk
+#if TYPE_CHECKING:
+#   from ...Indexor.Chunker.Chunk import Chunk
 
 ChunkKey = tuple[str, int]
 
@@ -190,7 +191,6 @@ class DataBaseHandler:
         """
             Return the corresponding chunk for a given id
         """
-        from ...Indexor.Chunker.Chunk import Chunk, ChunkType
 
         row = self.__db.execute(
             "SELECT c.chunk_id, f.path, f.content_hash, c.start, c.end, "
