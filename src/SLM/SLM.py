@@ -73,6 +73,11 @@ class SLM:
             )
 
     def __generate(self, prompt: str) -> str:
+        """
+            Generation loop of the SLM.
+
+            Will produce an answer string of MAX_TOKEN tokens.
+        """
 
         input_ids = self.__model.encode(prompt).tolist()[0]
         generated_ids = []
