@@ -1,12 +1,12 @@
 from llm_sdk import Small_LLM_Model
 from Model import MinimalSource
 from Helper import retrieve_text_from_source
-from typing import List
+from typing import List, cast
 import torch
 
 
 STOP_WORD: str = "\0"
-MAX_TOKEN: int = 500
+MAX_TOKEN: int = 30
 
 
 class SLM:
@@ -24,7 +24,7 @@ class SLM:
             max_token: int = MAX_TOKEN) -> None:
         """ Init method for the SLM """
         self.__model: Small_LLM_Model = model
-        self.__eos_token_id = self.__model.encode("\0").tolist()[0]
+        self.__eos_token_id: int = self.__model.encode("\0").tolist()[0][0]
         self.__max_token: int = max_token
         self.__pre_prompt: str = (
                 "<|im_start|>system\n"
@@ -73,29 +73,23 @@ class SLM:
             Will produce an answer string of MAX_TOKEN tokens.
         """
 
-        input_ids = self.__model.encode(prompt).tolist()[0]
-        generated_ids = []
+        input_ids: List[int] = self.__model.encode(prompt).tolist()[0]
+        generated_ids: List[int] = []
 
-        for _ in range(MAX_TOKEN):
-            model_input = torch.tensor(
-                [input_ids],
-                dtype=torch.long
-            )
+        for _ in range(self.__max_token):
             logits = self.__model.get_logits_from_input_ids(
-                model_input
+                input_ids
             )
-            next_token_logits = logits[0, -1, :]
-            next_token = torch.argmax(
-                next_token_logits
-            ).item()
+            next_token: int = int(torch.argmax(
+                torch.tensor(logits)
+            ).item())
             if next_token == self.__eos_token_id:
                 break
             generated_ids.append(next_token)
             input_ids.append(next_token)
+            print(generated_ids)
 
-        return self.__model.decode(
-            torch.tensor([generated_ids], dtype=torch.long)
-        )
+        return cast(str, self.__model.decode(generated_ids))
 
     def __build_prompt(self, query: str, sources: List[MinimalSource]) -> str:
         """ Generate the correct prompt for the SLM Answer generation """
@@ -104,7 +98,7 @@ class SLM:
         for i, source in enumerate(sources):
             context += (
                         f"SOURCE {i}:\n"
-                        f"File: {source.file_path}"
+                        f"File: {source.file_path}\n"
                         f"{retrieve_text_from_source(source)}\n\n"
                         )
 
