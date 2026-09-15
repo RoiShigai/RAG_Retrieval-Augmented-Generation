@@ -8,8 +8,8 @@ def retrieve_text_from_source(source: MinimalSource) -> str:
             a MinimalSource Chunk data
     """
     print(source)
-    with open(Path(source.file_path), "rb") as f:
-        f.seek(int(source.first_character_index), 1)
+    with open(Path(source.file_path), "r", encoding="utf-8") as f:
+        f.seek(int(source.first_character_index))
         content = f.read(
                 int(source.last_character_index - source.first_character_index)
                 )

@@ -6,7 +6,7 @@ import torch
 
 
 STOP_WORD: str = "\0"
-MAX_TOKEN: int = 30
+MAX_TOKEN: int = 60
 
 
 class SLM:
@@ -75,6 +75,7 @@ class SLM:
 
         input_ids: List[int] = self.__model.encode(prompt).tolist()[0]
         generated_ids: List[int] = []
+        print(prompt)
 
         for _ in range(self.__max_token):
             logits = self.__model.get_logits_from_input_ids(
