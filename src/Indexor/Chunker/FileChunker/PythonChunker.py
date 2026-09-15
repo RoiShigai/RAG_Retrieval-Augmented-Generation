@@ -60,7 +60,6 @@ class PythonChunker(FileChunker):
 
         self.__tokenizer = PythonTokenizer()
         self.__tokenizer.tokenize_file(source, offset)
-        print(f"Chunking: {path}")
         for node in tree.body:
             if isinstance(node, ast.ClassDef):
                 chunks.extend(

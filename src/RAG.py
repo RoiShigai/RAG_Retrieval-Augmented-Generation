@@ -36,6 +36,7 @@ class RAG:
             raise NotADirectoryError(self.__corpus)
         self.__database = DataBaseHandler(database)
         self.__bm25 = self.__load_bm25()
+        self.__model = None
 
     def index(
             self,
@@ -55,8 +56,10 @@ class RAG:
         """
         selected_corpus = self.__corpus if corpus is None else corpus.resolve()
         indexor: Indexor = Indexor(self.__database, max_chunk_size)
-        indexor.generate_chunks(selected_corpus)
-        chunk_corpus: List[Chunk] = self.__database.get_all_chunks()
+        chunk_corpus: List[Chunk] = indexor.generate_chunks(
+                selected_corpus
+                )
+        #chunk_corpus: List[Chunk] = self.__database.get_all_chunks()
 
         inverted_index = self.__bm25.create_index(chunk_corpus)
         self.__database.store_bm25_index(
@@ -69,7 +72,6 @@ class RAG:
             query: str,
             k: int) -> list[MinimalSource]:
         """Return source locations matching the query."""
-        self.__synchronize()
         matches = self.__bm25.search(tokenize_text(query), k)
         sources: list[MinimalSource] = []
         for chunk_key, _score in matches:
@@ -86,7 +88,8 @@ class RAG:
     def search_dataset(
             self,
             dataset_path: Path,
-            k: int, save_directory: Path = "data/dataset") -> None:
+            k: int,
+            save_directory: Path = Path("data/dataset")) -> None:
         """
             Read a given dataset containing User request and
                 search the top K chunks to answers each request and
@@ -126,7 +129,6 @@ class RAG:
                 the contest retrieved for this question.
         """
         search_result = self.search(query, k)
-        #print(search_result)
         answer = self.__generate_answer(search_result, query)
         print(answer)
 
@@ -134,7 +136,15 @@ class RAG:
             self,
             student_search_results_path: str,
             save_directory: str) -> None:
-        ...
+        """
+            Answer to a whole dataset of question and
+                store the response in a given directory
+
+            Parameters:
+                student_search_results_path: str | path to the questions dataset
+                save_directory: str | path to the directory
+        """
+
 
     def evaluate(
             self,
@@ -181,6 +191,7 @@ class RAG:
             Generate a MinimalAnswer Object with the retrieved Source
                 for a given query
         """
-        model = SLM(Small_LLM_Model())
-        answer = model.generate_response(search_result, query)
+        if self.__model is None:
+            self.__model = SLM(Small_LLM_Model())
+        answer = self.__model.generate_response(search_result, query)
         return answer

@@ -1,13 +1,10 @@
 from __future__ import annotations
-
 import hashlib
 import sqlite3
 from Indexor import Chunk, ChunkType
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable
+from typing import Iterable, cast
 
-#if TYPE_CHECKING:
-#   from ...Indexor.Chunker.Chunk import Chunk
 
 ChunkKey = tuple[str, int]
 
@@ -349,9 +346,52 @@ class DataBaseHandler:
     def get_all_chunks(self) -> list[Chunk]:
         """Return every currently stored chunk."""
         rows = self.__db.execute(
-            "SELECT hash_id, chunk_id FROM chunks ORDER BY hash_id, chunk_id"
+            "SELECT c.hash_id, c.chunk_id, f.path, f.content_hash, "
+            "c.start, c.end, c.chunk_type, c.parent_id, "
+            "t.token, t.frequency "
+            "FROM chunks c JOIN files f ON c.hash_id = f.hash_id "
+            "LEFT JOIN chunk_tokens t "
+            "ON c.hash_id = t.hash_id AND c.chunk_id = t.chunk_id "
+            "ORDER BY c.hash_id, c.chunk_id, t.token"
         ).fetchall()
-        return [self.get_chunk(row[0], row[1]) for row in rows]
+        chunks: list[Chunk] = []
+        current_key: tuple[str, int] | None = None
+        current_tokens: list[str] = []
+        current_data: tuple[object, ...] | None = None
+
+        for row in rows:
+            key = (row[0], row[1])
+            if current_key is not None and key != current_key:
+                chunks.append(self.__build_chunk(current_data, current_tokens))
+                current_tokens = []
+            if key != current_key:
+                current_key = key
+                current_data = row[:8]
+            if row[8] is not None:
+                current_tokens.extend([row[8]] * row[9])
+
+        if current_key is not None:
+            chunks.append(self.__build_chunk(current_data, current_tokens))
+        return chunks
+
+    def __build_chunk(
+            self,
+            data: tuple[object, ...] | None,
+            tokens: list[str]) -> Chunk:
+        """Build a chunk from one bulk-query row and its token frequencies."""
+        if data is None:
+            raise ValueError("Chunk data is required")
+        return Chunk(
+            id=cast(int, data[1]),
+            file_path=Path(cast(str, data[2])),
+            start=cast(int, data[4]),
+            end=cast(int, data[5]),
+            chunk_type=ChunkType(cast(str, data[6])),
+            parent_id=cast(int | None, data[7]),
+            tokens=tokens,
+            file_path_hash=cast(str, data[0]),
+            file_content_hash=cast(str, data[3]),
+        )
 
     def replace_file_chunks(
             self, filename: Path, chunks: Iterable[Chunk]) -> None:

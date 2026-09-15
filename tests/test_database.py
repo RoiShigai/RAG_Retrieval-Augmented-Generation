@@ -157,6 +157,45 @@ def test_bm25_data_round_trip_and_statistics(tmp_path: Path) -> None:
     database.close()
 
 
+def test_get_all_chunks_bulk_load_preserves_tokens(tmp_path: Path) -> None:
+    database = DataBaseHandler(tmp_path / "index.db")
+    source = tmp_path / "sample.py"
+    source.write_text("value = 1\n", encoding="utf-8")
+    path_hash, content_hash = database.get_file_identity(source)
+    database.update_file_metadata(source)
+    database.replace_file_chunks(source, [Chunk(
+        id=0,
+        file_path=source,
+        start=0,
+        end=5,
+        chunk_type=ChunkType.PYTHON_FUNCTION,
+        parent_id=None,
+        tokens=["value", "value", "one"],
+        file_path_hash=path_hash,
+        file_content_hash=content_hash,
+    ), Chunk(
+        id=1,
+        file_path=source,
+        start=5,
+        end=10,
+        chunk_type=ChunkType.PYTHON_CLASS,
+        parent_id=0,
+        tokens=["second"],
+        file_path_hash=path_hash,
+        file_content_hash=content_hash,
+    )])
+
+    chunks = database.get_all_chunks()
+
+    assert [(chunk.id, chunk.tokens) for chunk in chunks] == [
+        (0, ["one", "value", "value"]),
+        (1, ["second"]),
+    ]
+    assert chunks[0].chunk_type is ChunkType.PYTHON_FUNCTION
+    assert chunks[1].parent_id == 0
+    database.close()
+
+
 def test_synchronize_removes_deleted_file_and_postings(tmp_path: Path) -> None:
     database = DataBaseHandler(tmp_path / "index.db")
     source = tmp_path / "sample.md"

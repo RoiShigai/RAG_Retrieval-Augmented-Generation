@@ -105,6 +105,6 @@ class SLM:
 
         return (f"{self.__pre_prompt}{context}\n\n<|im_end|>\n"
                 f"<|im_start|>user\n {query}\n<|im_end|>\n"
-                "<|im_start|>assistant\n<|think|><|!think|>\n"
+                "<|im_start|>assistant\n<|think|>\n"
                 "# ANSWER: "
                 )

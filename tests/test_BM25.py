@@ -121,3 +121,21 @@ def test_persisted_index_has_same_ranking() -> None:
     assert restored.search(["compiler", "python"], top_k=3) == (
         original.search(["compiler", "python"], top_k=3)
     )
+
+
+def test_scoring_accumulates_all_matching_postings() -> None:
+    index = BM25Index()
+    index.create_index([chunk_01, chunk_02, chunk_03])
+
+    scores = index.score(["compiler", "python"])
+
+    assert set(scores) == {1, 2, 3}
+    assert scores[2] > scores[1]
+    assert scores[2] > scores[3]
+
+
+def test_top_k_zero_returns_no_results() -> None:
+    index = BM25Index()
+    index.create_index([chunk_01, chunk_02, chunk_03])
+
+    assert index.search(["compiler"], top_k=0) == []

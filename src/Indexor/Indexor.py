@@ -59,11 +59,9 @@ class Indexor:
             if path.suffix not in self.SUPPORTED_EXTENSION:
                 continue
 
-            print(f"[DEBUG]: current file {path}")
             modified = self.__database.check_file_modified(path)
             metadata = self.__database.get_file_metadata(path)
             if modified:
-                print(f"Chunking {path}")
                 path_hash, content_hash = (
                     self.__database.get_file_identity(path)
                 )
@@ -75,7 +73,6 @@ class Indexor:
                     iter(chunks), total=chunk_len,
                     bar_format="{n_fmt}/{chunk_len} | {l_bar}{bar}",
                     leave=False, desc="Creating new chunks for Database"):
-                    print(chunk)
                     chunk.file_path_hash = path_hash
                     chunk.file_content_hash = content_hash
                     fresh_chunks[(path_hash, chunk.id)] = chunk

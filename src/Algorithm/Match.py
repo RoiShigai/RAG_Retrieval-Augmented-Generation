@@ -1,5 +1,6 @@
 from Indexor.Chunker.Chunk import Chunk
 from typing import List, Tuple
+import heapq
 import math
 
 from Indexor.Chunker.Tokenizer.TokenNormalizer import tokenize_text
@@ -124,14 +125,28 @@ class BM25Index:
         query_tokens = list(dict.fromkeys(
             tokenize_text(" ".join(query_tokens))
         ))
-        candidates = self.__get_candidates(query_tokens)
         scores: dict[ChunkKey, float] = {}
 
-        for chunk_id in candidates:
-            total = 0.0
-            for token in query_tokens:
-                total += self.__score_token(token, chunk_id)
-            scores[chunk_id] = total
+        for token in query_tokens:
+            postings = self.inverted_index.get(token)
+            if not postings:
+                continue
+            idf = self.__idf(token)
+            boost = 1.0 if token in self.__STOPWORDS \
+                else self.exact_match_boost
+            for chunk_id, term_frequency in postings.items():
+                chunk_len = self.chunk_length[chunk_id]
+                if self.average_chunk_length == 0.0:
+                    continue
+                numerator = term_frequency * (self.k1 + 1.0)
+                denominator = term_frequency + self.k1 * (
+                    1.0 - self.b + self.b * (
+                        chunk_len / self.average_chunk_length
+                    )
+                )
+                scores[chunk_id] = scores.get(chunk_id, 0.0) + (
+                    idf * numerator / denominator * boost
+                )
 
         return scores
 
@@ -143,10 +158,9 @@ class BM25Index:
         Return the top_k candidate chunks for a given user query.
         """
         scores = self.score(query_tokens)
-        return sorted(
-            scores.items(),
-            key=lambda item: item[1],
-            reverse=True)[:top_k]
+        return heapq.nlargest(
+            top_k, scores.items(), key=lambda item: item[1]
+        )
 
     def __idf(self, tokens: str) -> float:
         """
@@ -163,42 +177,3 @@ class BM25Index:
             return 0.0
         return math.log(
             1.0 + (self.chunk_count - df + 0.5) / (df + 0.5))
-
-    def __score_token(self, token: str, chunk_id: ChunkKey) -> float:
-        """
-        Calculate the score for one token in one chunk
-        """
-        postings = self.inverted_index.get(token)
-
-        if not postings:
-            return 0.0
-        tf = postings.get(chunk_id)
-        if tf is None:
-            return 0.0
-
-        chunk_len = self.chunk_length[chunk_id]
-        idf = self.__idf(token)
-
-        numerator = tf * (self.k1 + 1.0)
-        denominator = (
-            tf + self.k1 * (
-                1.0 - self.b + self.b * (
-                    chunk_len / self.average_chunk_length
-                )
-            )
-        )
-        score = idf * numerator / denominator
-        if token not in self.__STOPWORDS:
-            score *= self.exact_match_boost
-        return score
-
-    def __get_candidates(self, query_tokens: List[str]) -> set[ChunkKey]:
-        """
-        Return the candidate chunk id for a given User query
-        """
-        candidates: set[ChunkKey] = set()
-        for token in query_tokens:
-            postings = self.inverted_index.get(token)
-            if postings:
-                candidates.update(postings.keys())
-        return candidates
