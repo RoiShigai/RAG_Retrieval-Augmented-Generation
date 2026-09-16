@@ -5,11 +5,15 @@ from DataHandler.DatabaseHandler.DataBaseHandler import DataBaseHandler
 from pathlib import Path
 from typing import List, cast
 from Algorithm.Match import ChunkKey
-from Model import MinimalSource, MinimalSearchResults, MinimalAnswer
+from Model import MinimalSource, MinimalSearchResults, MinimalAnswer, UnansweredQuestion
 from Indexor.Chunker.Tokenizer.TokenNormalizer import tokenize_text
 from Helper import create_json_file, load_json_file
 from SLM import SLM
 from llm_sdk import Small_LLM_Model
+import time
+
+
+TOP_K: int = 10
 
 
 class RagError(Exception):
@@ -31,11 +35,15 @@ class RAG:
             corpus: Path = Path("vllm-0.10.1"),
             ) -> None:
         """ Init Method of the RAG Main Class """
+        start = time.perf_counter()
         self.__corpus = corpus.resolve()
+        print(f"corpus resolve: {time.perf_counter() - start}")
         if not self.__corpus.is_dir():
             raise NotADirectoryError(self.__corpus)
         self.__database = DataBaseHandler(database)
+        print(f"database creation: {time.perf_counter() - start}")
         self.__bm25 = self.__load_bm25()
+        print(f"loading bm25: {time.perf_counter() - start}")
         self.__model = None
 
     def index(
@@ -57,7 +65,7 @@ class RAG:
         selected_corpus = self.__corpus if corpus is None else corpus.resolve()
         indexor: Indexor = Indexor(self.__database, max_chunk_size)
         chunk_corpus: List[Chunk] = indexor.generate_chunks(
-                selected_corpus
+                    selected_corpus
                 )
         #chunk_corpus: List[Chunk] = self.__database.get_all_chunks()
 
@@ -89,7 +97,8 @@ class RAG:
             self,
             dataset_path: Path,
             k: int,
-            save_directory: Path = Path("data/dataset")) -> None:
+            save_directory: Path = Path("data/dataset")
+            ) -> List[MinimalSearchResults]:
         """
             Read a given dataset containing User request and
                 search the top K chunks to answers each request and
@@ -100,30 +109,34 @@ class RAG:
                     the user request
                 k: int | the number of chunks retrieved to answer a question
                 save_directory: Path | Path to the folder where
+
+            Return:
+                List of MinimalSearchResults object
         """
         sources: List[MinimalSource] = []
         answers: List[MinimalSearchResults] = []
-        dataset: dict = load_json_file(dataset_path)
+        dataset: List[UnansweredQuestion] = [
+                UnansweredQuestion.model_construct(question = q.question)
+                for q in load_json_file(dataset_path)
+            ]
 
-        for id, request in dataset.items():
-            sources = self.search(request, k)
+        for question in dataset:
+            sources = self.search(question.question, k)
             answers.append(
                     MinimalSearchResults.model_construct(
-                        question_id=str(id),
-                        question=request,
+                        question_id=question.question_id,
+                        question=question.question,
                         retrieved_sources=sources
                         )
                     )
             sources.clear()
-        create_json_file(
-                Path(f"{save_directory}/StudentSearchResult.json"),
-                answers
-            )
+
+        return answers
 
     def answer(
             self,
             query: str,
-            k: int) -> None:
+            k: int = TOP_K) -> None:
         """
             Generate an Answer to a User Query with SLM using
                 the contest retrieved for this question.
@@ -144,7 +157,7 @@ class RAG:
                 student_search_results_path: str | path to the questions dataset
                 save_directory: str | path to the directory
         """
-
+        ...
 
     def evaluate(
             self,

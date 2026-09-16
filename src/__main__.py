@@ -1,7 +1,8 @@
 from RAG import RAG
 from pathlib import Path
+from Helper import create_json_file
 import fire
-import sys
+import time
 
 
 def index(max_chunk_size):
@@ -27,11 +28,18 @@ def search(query: str, k: int) -> None:
 def search_dataset(dataset_path: str, k: int, save_directory: str) -> None:
     """ Search dataset function called by Fire plugin """
     rag = RAG(Path("data/processed/database.db"))
-    rag.search_dataset(
+    answer = rag.search_dataset(
         Path(dataset_path),
         k,
         Path(save_directory)
     )
+    create_json_file(
+                Path(f"{save_directory}/dataset_answer.json"),
+                answer
+            )
+    print(
+            f"Dataset answer saved at '{save_directory}/dataset_answer.json'"
+        )
 
 
 def answer(query: str, k: int) -> None:
