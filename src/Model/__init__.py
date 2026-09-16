@@ -1,6 +1,6 @@
 from .MinimalSource import MinimalSource
 from .MinimalSearchResults import MinimalSearchResults, MinimalAnswer
-from .QuestionModel import AnsweredQuestion, UnansweredQuestion
+from .QuestionsModel import AnsweredQuestion, UnansweredQuestion
 
 __all__ = [
     "MinimalSource",

@@ -80,6 +80,7 @@ class RAG:
             query: str,
             k: int) -> list[MinimalSource]:
         """Return source locations matching the query."""
+        print(f"query: {query} k: {k}")
         matches = self.__bm25.search(tokenize_text(query), k)
         sources: list[MinimalSource] = []
         for chunk_key, _score in matches:
@@ -116,7 +117,7 @@ class RAG:
         sources: List[MinimalSource] = []
         answers: List[MinimalSearchResults] = []
         dataset: List[UnansweredQuestion] = [
-                UnansweredQuestion.model_construct(question = q.question)
+                UnansweredQuestion.model_construct(question = q["question"])
                 for q in load_json_file(dataset_path)
             ]
 
@@ -129,7 +130,7 @@ class RAG:
                         retrieved_sources=sources
                         )
                     )
-            sources.clear()
+            #sources.clear()
 
         return answers
 

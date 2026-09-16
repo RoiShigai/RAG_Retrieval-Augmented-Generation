@@ -2,6 +2,7 @@ from RAG import RAG
 from pathlib import Path
 from Helper import create_json_file
 import fire
+import sys
 import time
 
 
@@ -80,6 +81,8 @@ def test() -> None:
     #rag.debug_db()
 
 
-fire.Fire()
-#print(f"Catch {type(e).__name__}: {e}")
-#sys.exit()
+try:
+    fire.Fire()
+except Exception as e:
+    print(f"Catch {type(e).__name__}: {e}")
+    sys.exit()
