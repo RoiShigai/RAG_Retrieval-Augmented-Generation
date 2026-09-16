@@ -6,7 +6,7 @@ from src.DataHandler.DatabaseHandler.DataBaseHandler import DataBaseHandler
 from src.Indexor.Chunker.Chunk import Chunk, ChunkType
 
 
-def test_chunk_and_reverse_key_round_trip(tmp_path: Path) -> None:
+def test_chunk_and_bm25_posting_round_trip(tmp_path: Path) -> None:
     database = DataBaseHandler(tmp_path / "index.db")
     source = tmp_path / "sample.md"
     source.write_text("# title\n", encoding="utf-8")
@@ -32,11 +32,14 @@ def test_chunk_and_reverse_key_round_trip(tmp_path: Path) -> None:
     loaded = database.get_chunk(path_hash, 0)
     assert loaded.file_content_hash == content_hash
     assert loaded.tokens == ["title", "title"]
-    assert database.load_bm25_index() == {"title": {(path_hash, 0): 2}}
+    assert database.get_bm25_postings(["title"]) == (
+        [("title", path_hash, 0, 2, 1, 2)], 1, 2
+    )
     database.close()
 
 
-def test_load_bm25_index_keeps_all_postings(tmp_path: Path) -> None:
+def test_bm25_posting_query_keeps_all_matching_postings(
+        tmp_path: Path) -> None:
     database = DataBaseHandler(tmp_path / "index.db")
     source = tmp_path / "sample.md"
     source.write_text("# title\n", encoding="utf-8")
@@ -71,12 +74,12 @@ def test_load_bm25_index_keeps_all_postings(tmp_path: Path) -> None:
         },
     })
 
-    assert database.load_bm25_index() == {
-        "title": {
-            (path_hash, 0): 1,
-            (path_hash, 1): 1,
-        },
-    }
+    rows, total_chunks, total_lengths = database.get_bm25_postings(["title"])
+    assert sorted(rows) == [
+        ("title", path_hash, 0, 1, 2, 1),
+        ("title", path_hash, 1, 1, 2, 1),
+    ]
+    assert (total_chunks, total_lengths) == (2, 2)
     database.close()
 
 
@@ -121,7 +124,7 @@ def test_schema_contains_three_tables(tmp_path: Path) -> None:
         )
     }
     assert tables == {
-        "files", "chunks", "reverse_key", "chunk_tokens", "token_stats",
+        "files", "chunks", "chunk_tokens", "token_stats",
         "index_metadata",
     }
     connection.close()
@@ -150,10 +153,14 @@ def test_bm25_data_round_trip_and_statistics(tmp_path: Path) -> None:
         "body": {(path_hash, 0): 1},
     })
 
-    data = database.load_bm25_data()
-    assert data[1] == {"title": 1, "body": 1}
-    assert data[2] == {(path_hash, 0): 3}
-    assert data[3] == 1
+    rows, total_chunks, total_lengths = database.get_bm25_postings(
+        ["title", "body"]
+    )
+    assert sorted(rows) == [
+        ("body", path_hash, 0, 1, 1, 3),
+        ("title", path_hash, 0, 2, 1, 3),
+    ]
+    assert (total_chunks, total_lengths) == (1, 3)
     database.close()
 
 
@@ -217,6 +224,5 @@ def test_synchronize_removes_deleted_file_and_postings(tmp_path: Path) -> None:
     source.unlink()
 
     assert database.synchronize_corpus(tmp_path)
-    assert database.load_bm25_index() == {}
-    assert database.load_bm25_data()[1:] == ({}, {}, 0)
+    assert database.get_bm25_postings(["title"]) == ([], 0, 0)
     database.close()

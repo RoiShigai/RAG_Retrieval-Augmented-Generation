@@ -71,8 +71,10 @@ class Indexor:
 
                 for chunk in tqdm(
                     iter(chunks), total=chunk_len,
-                    bar_format="{n_fmt}/{chunk_len} | {l_bar}{bar}",
-                    leave=False, desc="Creating new chunks for Database"):
+                    bar_format="{n_fmt}/{total_fmt} | {l_bar}{bar}",
+                    leave=False,
+                    desc="Creating new chunks for Database"
+                ):
                     chunk.file_path_hash = path_hash
                     chunk.file_content_hash = content_hash
                     fresh_chunks[(path_hash, chunk.id)] = chunk

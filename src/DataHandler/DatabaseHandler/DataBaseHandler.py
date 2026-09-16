@@ -7,6 +7,7 @@ from typing import Iterable, cast
 
 
 ChunkKey = tuple[str, int]
+SCHEMA_VERSION = 2
 
 
 class DataBaseHandler:
@@ -46,18 +47,9 @@ class DataBaseHandler:
                 end INTEGER NOT NULL,
                 chunk_type TEXT NOT NULL,
                 parent_id INTEGER,
+                token_lengths INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (hash_id, chunk_id),
                 FOREIGN KEY (hash_id) REFERENCES files(hash_id)
-                    ON DELETE CASCADE
-            );
-            CREATE TABLE IF NOT EXISTS reverse_key (
-                hash_id TEXT NOT NULL,
-                chunk_id INTEGER NOT NULL,
-                token TEXT NOT NULL,
-                frequency INTEGER NOT NULL,
-                PRIMARY KEY (hash_id, chunk_id, token),
-                FOREIGN KEY (hash_id, chunk_id)
-                    REFERENCES chunks(hash_id, chunk_id)
                     ON DELETE CASCADE
             );
             CREATE TABLE IF NOT EXISTS chunk_tokens (
@@ -76,22 +68,68 @@ class DataBaseHandler:
             );
             CREATE TABLE IF NOT EXISTS index_metadata (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
-                total_chunks INTEGER NOT NULL CHECK (total_chunks >= 0)
+                total_chunks INTEGER NOT NULL CHECK (total_chunks >= 0),
+                total_token_lengths INTEGER NOT NULL DEFAULT 0
             );
+            CREATE INDEX IF NOT EXISTS idx_chunk_tokens_token
+                ON chunk_tokens(token);
             """
         )
         self.__db.commit()
-        self.__migrate_bm25_tables()
+        self.__migrate_schema()
 
-    def __migrate_bm25_tables(self) -> None:
-        """Copy legacy reverse-key data into the persistent BM25 tables."""
-        with self.__db:
+    def __migrate_schema(self) -> None:
+        """Migrate legacy BM25 storage once and set the schema version."""
+        version = self.__db.execute("PRAGMA user_version").fetchone()[0]
+        if version >= SCHEMA_VERSION:
+            return
+
+        if not self.__has_column("chunks", "token_lengths"):
             self.__db.execute(
-                "INSERT OR IGNORE INTO chunk_tokens "
-                "(hash_id, chunk_id, token, frequency) "
-                "SELECT hash_id, chunk_id, token, frequency FROM reverse_key"
+                "ALTER TABLE chunks ADD COLUMN token_lengths "
+                "INTEGER NOT NULL DEFAULT 0"
+            )
+        if not self.__has_column("index_metadata", "total_token_lengths"):
+            self.__db.execute(
+                "ALTER TABLE index_metadata ADD COLUMN total_token_lengths "
+                "INTEGER NOT NULL DEFAULT 0"
+            )
+
+        has_reverse_key = self.__has_table("reverse_key")
+        with self.__db:
+            if has_reverse_key:
+                self.__db.execute(
+                    "INSERT OR IGNORE INTO chunk_tokens "
+                    "(hash_id, chunk_id, token, frequency) "
+                    "SELECT hash_id, chunk_id, token, frequency "
+                    "FROM reverse_key"
+                )
+                self.__db.execute("DROP TABLE reverse_key")
+            self.__db.execute(
+                "UPDATE chunks SET token_lengths = COALESCE(("
+                "SELECT SUM(frequency) FROM chunk_tokens "
+                "WHERE chunk_tokens.hash_id = chunks.hash_id "
+                "AND chunk_tokens.chunk_id = chunks.chunk_id), 0)"
             )
             self.__refresh_bm25_metadata()
+            self.__db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
+        if has_reverse_key:
+            self.__db.execute("VACUUM")
+
+    def __has_table(self, table: str) -> bool:
+        """Return whether a table exists in the database."""
+        row = self.__db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table,),
+        ).fetchone()
+        return row is not None
+
+    def __has_column(self, table: str, column: str) -> bool:
+        """Return whether a table contains a column."""
+        return column in {
+            row[1] for row in self.__db.execute(f"PRAGMA table_info({table})")
+        }
 
     def __path_hash(self, filename: Path) -> str:
         """Return the stable identifier for a file path."""
@@ -174,13 +212,13 @@ class DataBaseHandler:
         """
         rows = [
             (chunk.file_path_hash, chunk.id, chunk.start, chunk.end,
-             chunk.chunk_type.value, chunk.parent_id)
+             chunk.chunk_type.value, chunk.parent_id, len(chunk.tokens))
             for chunk in chunks
         ]
         self.__db.executemany(
             "INSERT OR REPLACE INTO chunks "
-            "(hash_id, chunk_id, start, end, chunk_type, parent_id) "
-            "VALUES (?, ?, ?, ?, ?, ?)", rows,
+            "(hash_id, chunk_id, start, end, chunk_type, parent_id, "
+            "token_lengths) VALUES (?, ?, ?, ?, ?, ?, ?)", rows,
         )
         self.__db.commit()
 
@@ -224,22 +262,14 @@ class DataBaseHandler:
                     raise ValueError("Database indexes require hashed chunks")
                 hash_id, chunk_id = chunk_key
                 rows.append((hash_id, chunk_id, token, frequency))
-        chunk_lengths: dict[tuple[str, int], int] = {}
         token_stats: dict[str, int] = {}
         for hash_id, chunk_id, token, frequency in rows:
-            key = (hash_id, chunk_id)
-            chunk_lengths[key] = chunk_lengths.get(key, 0) + frequency
             token_stats[token] = token_stats.get(token, 0) + 1
 
         with self.__db:
-            self.__db.execute("DELETE FROM reverse_key")
             self.__db.execute("DELETE FROM chunk_tokens")
             self.__db.execute("DELETE FROM token_stats")
             self.__db.execute("DELETE FROM index_metadata")
-            self.__db.executemany(
-                "INSERT INTO reverse_key(hash_id, chunk_id, token, frequency) "
-                "VALUES (?, ?, ?, ?)", rows
-            )
             self.__db.executemany(
                 "INSERT INTO chunk_tokens(hash_id, chunk_id, token, "
                 "frequency) "
@@ -254,48 +284,36 @@ class DataBaseHandler:
                 "SELECT COUNT(*) FROM chunks"
             ).fetchone()[0]
             self.__db.execute(
-                "INSERT INTO index_metadata(id, total_chunks) VALUES (1, ?)",
-                (total_chunks,),
+                "INSERT INTO index_metadata(id, total_chunks, "
+                "total_token_lengths) VALUES (1, ?, ?)",
+                (total_chunks, self.__total_token_lengths()),
             )
 
-    def load_bm25_index(self) -> dict[str, dict[tuple[str, int], int]]:
-        """
-            Load the BM25 index from the databasa
-        """
+    def get_bm25_postings(
+            self, tokens: Iterable[str]
+            ) -> tuple[list[tuple[str, str, int, int, int, int]], int, int]:
+        """Return postings, statistics, and lengths for query tokens only."""
+        token_list = list(dict.fromkeys(tokens))
+        if not token_list:
+            return [], 0, 0
+        placeholders = ", ".join("?" for _ in token_list)
         rows = self.__db.execute(
-            "SELECT token, hash_id, chunk_id, frequency FROM reverse_key"
+            "SELECT t.token, t.hash_id, t.chunk_id, t.frequency, "
+            "s.chunk_frequency, c.token_lengths "
+            "FROM chunk_tokens t "
+            "JOIN token_stats s ON s.token = t.token "
+            "JOIN chunks c ON c.hash_id = t.hash_id "
+            "AND c.chunk_id = t.chunk_id "
+            f"WHERE t.token IN ({placeholders})",
+            token_list,
         ).fetchall()
-        index: dict[str, dict[tuple[str, int], int]] = {}
-        for token, hash_id, chunk_id, frequency in rows:
-            index.setdefault(token, {})[(hash_id, chunk_id)] = frequency
-        return index
-
-    def load_bm25_data(
-            self,
-            ) -> tuple[
-                dict[str, dict[tuple[str, int], int]],
-                dict[str, int],
-                dict[tuple[str, int], int],
-                int,
-            ]:
-        """Load all persisted data required to calculate BM25 scores."""
-        index = self.load_bm25_index()
-        stats = {
-            token: frequency for token, frequency in self.__db.execute(
-                "SELECT token, chunk_frequency FROM token_stats"
-            ).fetchall()
-        }
-        lengths = {
-            (hash_id, chunk_id): length
-            for hash_id, chunk_id, length in self.__db.execute(
-                "SELECT hash_id, chunk_id, SUM(frequency) "
-                "FROM chunk_tokens GROUP BY hash_id, chunk_id"
-            ).fetchall()
-        }
-        row = self.__db.execute(
-            "SELECT total_chunks FROM index_metadata WHERE id = 1"
+        metadata = self.__db.execute(
+            "SELECT total_chunks, total_token_lengths "
+            "FROM index_metadata WHERE id = 1"
         ).fetchone()
-        return index, stats, lengths, 0 if row is None else row[0]
+        if metadata is None:
+            return rows, 0, 0
+        return rows, metadata[0], metadata[1]
 
     def synchronize_corpus(self, corpus: Path) -> bool:
         """Remove deleted files and report whether indexing is required."""
@@ -339,9 +357,17 @@ class DataBaseHandler:
         ).fetchone()[0]
         self.__db.execute("DELETE FROM index_metadata")
         self.__db.execute(
-            "INSERT INTO index_metadata(id, total_chunks) VALUES (1, ?)",
-            (total_chunks,),
+            "INSERT INTO index_metadata(id, total_chunks, "
+            "total_token_lengths) VALUES (1, ?, ?)",
+            (total_chunks, self.__total_token_lengths()),
         )
+
+    def __total_token_lengths(self) -> int:
+        """Return the persisted total number of chunk tokens."""
+        row = self.__db.execute(
+            "SELECT COALESCE(SUM(token_lengths), 0) FROM chunks"
+        ).fetchone()
+        return 0 if row is None else row[0]
 
     def get_all_chunks(self) -> list[Chunk]:
         """Return every currently stored chunk."""
@@ -400,7 +426,7 @@ class DataBaseHandler:
         chunk_list = list(chunks)
         chunk_rows = [
             (chunk.file_path_hash, chunk.id, chunk.start, chunk.end,
-             chunk.chunk_type.value, chunk.parent_id)
+             chunk.chunk_type.value, chunk.parent_id, len(chunk.tokens))
             for chunk in chunk_list
         ]
         token_rows: list[tuple[str, int, str, int]] = []
@@ -419,7 +445,8 @@ class DataBaseHandler:
             )
             self.__db.executemany(
                 "INSERT INTO chunks(hash_id, chunk_id, start, end, "
-                "chunk_type, parent_id) VALUES (?, ?, ?, ?, ?, ?)",
+                "chunk_type, parent_id, token_lengths) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 chunk_rows,
             )
             self.__db.executemany(

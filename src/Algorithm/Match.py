@@ -1,11 +1,19 @@
 from Indexor.Chunker.Chunk import Chunk
-from typing import List, Tuple
+from typing import TYPE_CHECKING, List, Tuple
 import heapq
 import math
 
 from Indexor.Chunker.Tokenizer.TokenNormalizer import tokenize_text
 
+if TYPE_CHECKING:
+    from DataHandler.DatabaseHandler.DataBaseHandler import DataBaseHandler
+
 ChunkKey = int | tuple[str, int]
+STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "by", "for",
+    "from", "in", "is", "it", "of", "on", "or", "that", "the",
+    "this", "to", "was", "were", "with",
+}
 
 
 class BM25Index:
@@ -17,11 +25,7 @@ class BM25Index:
         the right chunks using an inverted tokens index.
     """
 
-    __STOPWORDS = {
-        "a", "an", "and", "are", "as", "at", "be", "by", "for",
-        "from", "in", "is", "it", "of", "on", "or", "that", "the",
-        "this", "to", "was", "were", "with",
-    }
+    __STOPWORDS = STOPWORDS
 
     def __init__(
             self,
@@ -177,3 +181,64 @@ class BM25Index:
             return 0.0
         return math.log(
             1.0 + (self.chunk_count - df + 0.5) / (df + 0.5))
+
+
+class DatabaseBM25Index:
+    """BM25 matcher that reads only query postings from SQLite."""
+
+    __STOPWORDS = STOPWORDS
+
+    def __init__(
+            self,
+            database: "DataBaseHandler",
+            k1: float = 1.2,
+            b: float = 0.75,
+            exact_match_boost: float = 1.15) -> None:
+        """Initialize a database-backed BM25 matcher."""
+        self.__database = database
+        self.k1 = k1
+        self.b = b
+        self.exact_match_boost = exact_match_boost
+
+    def search(
+            self,
+            query_tokens: List[str],
+            top_k: int = 10) -> List[Tuple[ChunkKey, float]]:
+        """Return ranked chunks for query tokens loaded from SQLite."""
+        tokens = list(dict.fromkeys(
+            tokenize_text(" ".join(query_tokens))
+        ))
+        rows, chunk_count, total_token_lengths = (
+            self.__database.get_bm25_postings(tokens)
+        )
+        if not rows or chunk_count == 0:
+            return []
+        lengths = {
+            (row[1], row[2]): row[5] for row in rows
+        }
+        average_length = total_token_lengths / chunk_count
+        if average_length == 0.0:
+            return []
+        scores: dict[ChunkKey, float] = {}
+        for token, hash_id, chunk_id, frequency, document_frequency, _ in rows:
+            key = (hash_id, chunk_id)
+            idf = math.log(
+                1.0 + (chunk_count - document_frequency + 0.5) / (
+                    document_frequency + 0.5
+                )
+            )
+            numerator = frequency * (self.k1 + 1.0)
+            denominator = frequency + self.k1 * (
+                1.0 - self.b + self.b * (
+                    lengths[key] / average_length
+                )
+            )
+            boost = 1.0 if token in self.__STOPWORDS else (
+                self.exact_match_boost
+            )
+            scores[key] = scores.get(key, 0.0) + (
+                idf * numerator / denominator * boost
+            )
+        return heapq.nlargest(
+            top_k, scores.items(), key=lambda item: item[1]
+        )

@@ -21,6 +21,5 @@ def create_json_file(
             store the inputed content
     """
     data = {model.question_id: model.model_dump() for model in content}
-    #print(f"json_dict: {json_dict}")
     with open(file_path, "w+") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)

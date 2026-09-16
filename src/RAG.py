@@ -1,13 +1,12 @@
 from Indexor.Chunker.Chunk import Chunk
 from Indexor.Indexor import Indexor
-from Algorithm import BM25Index
+from Algorithm import BM25Index, DatabaseBM25Index
 from DataHandler.DatabaseHandler.DataBaseHandler import DataBaseHandler
 from pathlib import Path
 from typing import List, cast
-from Algorithm.Match import ChunkKey
 from Model import MinimalSource, MinimalSearchResults, MinimalAnswer, UnansweredQuestion
 from Indexor.Chunker.Tokenizer.TokenNormalizer import tokenize_text
-from Helper import create_json_file, load_json_file
+from Helper import load_json_file
 from SLM import SLM
 from llm_sdk import Small_LLM_Model
 import time
@@ -42,7 +41,7 @@ class RAG:
             raise NotADirectoryError(self.__corpus)
         self.__database = DataBaseHandler(database)
         print(f"database creation: {time.perf_counter() - start}")
-        self.__bm25 = self.__load_bm25()
+        self.__bm25 = DatabaseBM25Index(self.__database)
         print(f"loading bm25: {time.perf_counter() - start}")
         self.__model = None
 
@@ -69,7 +68,7 @@ class RAG:
                 )
         #chunk_corpus: List[Chunk] = self.__database.get_all_chunks()
 
-        inverted_index = self.__bm25.create_index(chunk_corpus)
+        inverted_index = BM25Index().create_index(chunk_corpus)
         self.__database.store_bm25_index(
             cast(dict[str, dict[tuple[str, int], int]], inverted_index)
         )
@@ -80,7 +79,6 @@ class RAG:
             query: str,
             k: int) -> list[MinimalSource]:
         """Return source locations matching the query."""
-        print(f"query: {query} k: {k}")
         matches = self.__bm25.search(tokenize_text(query), k)
         sources: list[MinimalSource] = []
         for chunk_key, _score in matches:
@@ -130,7 +128,6 @@ class RAG:
                         retrieved_sources=sources
                         )
                     )
-            #sources.clear()
 
         return answers
 
@@ -166,16 +163,6 @@ class RAG:
             dataset_path: str) -> None:
         ...
 
-    def __load_bm25(self) -> BM25Index:
-        """Load the persisted BM25 index."""
-        index, stats, lengths, count = self.__database.load_bm25_data()
-        return BM25Index.from_persisted(
-            cast(dict[str, dict[ChunkKey, int]], index),
-            stats,
-            cast(dict[ChunkKey, int], lengths),
-            count,
-        )
-
     def __synchronize(self) -> None:
         """Synchronize the corpus and reload BM25 when it changes."""
         changed = self.__database.synchronize_corpus(self.__corpus)
@@ -185,17 +172,15 @@ class RAG:
             self.__database.store_bm25_index(
                 cast(dict[str, dict[tuple[str, int], int]], created)
             )
-            self.__bm25 = self.__load_bm25()
+            self.__bm25 = DatabaseBM25Index(self.__database)
 
     def debug_db(self) -> None:
         """ Debug function to check what is stored into the db """
-        reverse_index_db = self.__database.load_bm25_index()
 #       print("[DATABASE CHUNK DEBUGGING]")
 #       for chunks in chunks_db:
 #           chunks.debug_chunk()
         print("[DATABASE INDEX DEBUGGING]")
-        for k, v in reverse_index_db.items():
-            print(f"key: {k}: value: {v}")
+        print("BM25 postings remain persisted in SQLite and are query-loaded.")
 
     def __generate_answer(
             self,
