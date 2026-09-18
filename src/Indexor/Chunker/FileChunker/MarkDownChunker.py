@@ -61,9 +61,9 @@ class MarkDownChunker(FileChunker):
         Convert a MarkDownSection object into a Chunk
         """
         content = source[section.start:section.end]
-        tokens = self.__tokenizer.tokenize(content)
 
         if len(content) <= self.__max_chunk_size:
+            tokens = self.__tokenizer.tokenize(content)
             return [
                 self.__create_chunk(
                     path,

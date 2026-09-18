@@ -5,8 +5,8 @@ from typing import List, cast
 import torch
 
 
-STOP_WORD: str = "\0"
-MAX_TOKEN: int = 60
+STOP_WORD: str = "</think>"
+MAX_TOKEN: int = 20
 
 
 class SLM:
@@ -24,7 +24,7 @@ class SLM:
             max_token: int = MAX_TOKEN) -> None:
         """ Init method for the SLM """
         self.__model: Small_LLM_Model = model
-        self.__eos_token_id: int = self.__model.encode("\0").tolist()[0][0]
+        self.__eos_token_id: int = self.__model.encode(STOP_WORD).tolist()[0][0]
         self.__max_token: int = max_token
         self.__pre_prompt: str = (
                 "<|im_start|>system\n"

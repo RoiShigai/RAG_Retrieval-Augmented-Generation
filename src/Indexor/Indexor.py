@@ -38,7 +38,9 @@ class Indexor:
             ".md": MarkDownChunker(chunk_size, self.__id_generator)
         }
 
-    def generate_chunks(self, root_file: Path) -> List[Chunk]:
+    def generate_chunks(
+            self, root_file: Path, include_existing: bool = True
+            ) -> List[Chunk]:
         """
         Main function for Indexing files into chunks.
         This function will start to chunkenize every supported file
@@ -49,6 +51,9 @@ class Indexor:
             root_file: the directory where the Indexer will gather the files.
 
         Return:
+            include_existing: Whether to load unchanged chunks into the
+                returned list. Disable this for database-native indexing.
+
             This function will return a list of chunks
         """
         fresh_chunks: dict[tuple[str, int], Chunk] = {}
@@ -77,7 +82,8 @@ class Indexor:
                 ):
                     chunk.file_path_hash = path_hash
                     chunk.file_content_hash = content_hash
-                    fresh_chunks[(path_hash, chunk.id)] = chunk
+                    if include_existing:
+                        fresh_chunks[(path_hash, chunk.id)] = chunk
 
                 self.__database.update_file_metadata(path)
                 self.__database.replace_file_chunks(path, chunks)
@@ -86,6 +92,8 @@ class Indexor:
                     "modified_timestamp"]:
                 self.__database.update_file_metadata(path)
 
+        if not include_existing:
+            return []
         chunks_by_key = {
             (chunk.file_path_hash, chunk.id): chunk
             for chunk in self.__database.get_all_chunks()

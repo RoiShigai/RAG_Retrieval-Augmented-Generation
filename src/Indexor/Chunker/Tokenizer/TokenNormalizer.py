@@ -23,9 +23,11 @@ def normalize_identifier(identifier: str) -> List[str]:
         result.extend(piece.lower() for piece in _CAMEL_PARTS.findall(part))
 
     unique: List[str] = []
+    seen: set[str] = set()
     for token in result:
-        if token and token not in unique:
+        if token and token not in seen:
             unique.append(token)
+            seen.add(token)
     return unique
 
 
@@ -53,12 +55,14 @@ def add_context_tokens(
         language: str = "python") -> List[str]:
     """Add filename and source-kind tokens to a chunk token list."""
     result = list(tokens)
+    seen = set(result)
     context = [*tokenize_text(filename), language, "code"]
     if kind == "class":
         context.append("class")
     elif kind == "function":
         context.append("function")
     for token in context:
-        if token not in result:
+        if token not in seen:
             result.append(token)
+            seen.add(token)
     return result

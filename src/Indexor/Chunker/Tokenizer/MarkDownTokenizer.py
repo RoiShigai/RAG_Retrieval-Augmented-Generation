@@ -72,7 +72,7 @@ class MarkDownTokenizer:
                 end=len(source)
             )
             while stack and stack[-1].level >= level:
-                stack.pop()
+                stack.pop().end = offset
             if stack:
                 section.parent = stack[-1]
                 stack[-1].children.append(section)
@@ -80,13 +80,8 @@ class MarkDownTokenizer:
             sections.append(section)
             offset += len(line)
 
-        for i, section in enumerate(sections):
+        for section in stack:
             section.end = len(source)
-
-            for next_section in sections[i + 1:]:
-                if next_section.level <= section.level:
-                    section.end = next_section.start
-                    break
         return sections
 
     def __clean_markdown(self, source: str) -> str:

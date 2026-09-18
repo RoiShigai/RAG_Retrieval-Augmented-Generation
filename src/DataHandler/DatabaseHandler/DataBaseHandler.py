@@ -362,6 +362,11 @@ class DataBaseHandler:
             (total_chunks, self.__total_token_lengths()),
         )
 
+    def refresh_bm25_metadata(self) -> None:
+        """Refresh BM25 aggregates without rebuilding persisted postings."""
+        with self.__db:
+            self.__refresh_bm25_metadata()
+
     def __total_token_lengths(self) -> int:
         """Return the persisted total number of chunk tokens."""
         row = self.__db.execute(

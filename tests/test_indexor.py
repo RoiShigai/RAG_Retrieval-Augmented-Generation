@@ -47,3 +47,17 @@ def test_generated_tokens_are_persisted_for_bm25_rebuild(
     assert any("searchable" in chunk.tokens for chunk in persisted_chunks)
     assert "searchable" in rebuilt_index.inverted_index
     database.close()
+
+
+def test_indexing_mode_does_not_load_existing_chunks(tmp_path: Path) -> None:
+    database = DataBaseHandler(tmp_path / "index.db")
+    source = tmp_path / "sample.py"
+    source.write_text("def sample():\n    return searchable\n")
+
+    chunks = Indexor(database).generate_chunks(
+        tmp_path, include_existing=False
+    )
+
+    assert chunks == []
+    assert database.get_all_chunks()
+    database.close()

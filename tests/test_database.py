@@ -164,6 +164,33 @@ def test_bm25_data_round_trip_and_statistics(tmp_path: Path) -> None:
     database.close()
 
 
+def test_refresh_bm25_metadata_preserves_postings(tmp_path: Path) -> None:
+    database = DataBaseHandler(tmp_path / "index.db")
+    source = tmp_path / "sample.md"
+    source.write_text("# title\n", encoding="utf-8")
+    path_hash, content_hash = database.get_file_identity(source)
+    database.update_file_metadata(source)
+    database.replace_file_chunks(source, [Chunk(
+        id=0,
+        file_path=source,
+        start=0,
+        end=8,
+        chunk_type=ChunkType.MARKDOWN_SECTION,
+        parent_id=None,
+        tokens=["title", "title", "body"],
+        file_path_hash=path_hash,
+        file_content_hash=content_hash,
+    )])
+
+    database.refresh_bm25_metadata()
+
+    assert database.get_bm25_postings(["title", "body"])[0] == [
+        ("body", path_hash, 0, 1, 1, 3),
+        ("title", path_hash, 0, 2, 1, 3),
+    ]
+    database.close()
+
+
 def test_get_all_chunks_bulk_load_preserves_tokens(tmp_path: Path) -> None:
     database = DataBaseHandler(tmp_path / "index.db")
     source = tmp_path / "sample.py"
