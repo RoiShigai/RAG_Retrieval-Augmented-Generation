@@ -1,6 +1,6 @@
 from src.Indexor.Chunker.FileChunker.PythonChunker import PythonChunker
 from src.Indexor.Chunker.FileChunker.MarkDownChunker import MarkDownChunker
-from src.Indexor.Chunker.Chunk import IdGenerator
+from src.Indexor.Chunker.Chunk import ChunkType, IdGenerator
 from pathlib import Path
 
 MAX_CHUNK_SIZE = 2000
@@ -78,3 +78,78 @@ def test_markdown_preamble_is_indexed(tmp_path: Path) -> None:
     chunks = MarkDownChunker(2000, IdGenerator()).chunk(path)
 
     assert any("searchable" in chunk.tokens for chunk in chunks)
+
+
+def test_python_module_statements_are_indexed(tmp_path: Path) -> None:
+    path = tmp_path / "module.py"
+    path.write_text(
+        '"""module documentation"""\n'
+        'MODULE_SETTING = "searchable setting"\n'
+        "import pathlib\n"
+    )
+
+    chunks = PythonChunker(2000, IdGenerator()).chunk(path)
+
+    assert chunks
+    assert all(chunk.chunk_type == ChunkType.PYTHON_MODULE for chunk in chunks)
+    assert any("searchable" in chunk.tokens for chunk in chunks)
+    assert all("module" in chunk.tokens for chunk in chunks)
+
+
+def test_split_function_chunks_keep_function_context(tmp_path: Path) -> None:
+    path = tmp_path / "loader.py"
+    path.write_text(
+        "def load_model():\n"
+        '    first = "a long value that must be split"\n'
+        '    second = "another long value that must be split"\n'
+    )
+
+    chunks = PythonChunker(20, IdGenerator()).chunk(path)
+
+    assert len(chunks) > 1
+    assert all("load_model" in chunk.tokens for chunk in chunks)
+    assert all("load" in chunk.tokens for chunk in chunks)
+    assert all("model" in chunk.tokens for chunk in chunks)
+
+
+def test_split_class_method_chunks_keep_class_and_method_context(
+        tmp_path: Path) -> None:
+    path = tmp_path / "runner.py"
+    path.write_text(
+        "class ModelRunner:\n"
+        "    def initialize_cache(self):\n"
+        '        value = "a long value that must be split"\n'
+        '        other = "another long value that must be split"\n'
+    )
+
+    chunks = PythonChunker(25, IdGenerator()).chunk(path)
+
+    assert len(chunks) > 1
+    assert all("modelrunner" in chunk.tokens for chunk in chunks)
+    assert all("initialize_cache" in chunk.tokens for chunk in chunks)
+    assert all("initialize" in chunk.tokens for chunk in chunks)
+    assert all("cache" in chunk.tokens for chunk in chunks)
+
+
+def test_markdown_oversized_chunks_overlap(tmp_path: Path) -> None:
+    path = tmp_path / "overlap.md"
+    path.write_text(" ".join(f"word{index}" for index in range(80)))
+
+    chunks = MarkDownChunker(40, IdGenerator()).chunk(path)
+
+    assert len(chunks) > 1
+    assert all(chunk.end - chunk.start <= 40 for chunk in chunks)
+    assert any(
+        current.start < previous.end
+        for previous, current in zip(chunks, chunks[1:])
+    )
+
+
+def test_markdown_overlap_handles_minimum_chunk_size(tmp_path: Path) -> None:
+    path = tmp_path / "small.md"
+    path.write_text("abcdefghij")
+
+    chunks = MarkDownChunker(1, IdGenerator()).chunk(path)
+
+    assert chunks
+    assert all(chunk.end - chunk.start <= 1 for chunk in chunks)

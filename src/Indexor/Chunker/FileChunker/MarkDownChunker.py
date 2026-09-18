@@ -14,6 +14,8 @@ from typing import List
 
 class MarkDownChunker(FileChunker):
 
+    __OVERLAP_RATIO = 10
+
     def __init__(self, chunk_size: int, id_generator: IdGenerator) -> None:
         """
         Init method of the PythonFileCHunker class,
@@ -179,8 +181,12 @@ class MarkDownChunker(FileChunker):
             parent_id: int | None) -> List[Chunk]:
         """Split an oversized Markdown leaf on lines and characters."""
         chunks: List[Chunk] = []
+        overlap = min(
+            self.__max_chunk_size - 1,
+            max(1, self.__max_chunk_size // self.__OVERLAP_RATIO),
+        )
         for chunk_start, chunk_end in split_source_ranges(
-                source, start, end, self.__max_chunk_size):
+                source, start, end, self.__max_chunk_size, overlap):
             current_section = section
             if current_section is None:
                 current_section = MarkdownSection("", 0, start, end)

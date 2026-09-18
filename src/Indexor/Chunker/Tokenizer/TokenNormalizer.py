@@ -52,7 +52,8 @@ def tokenize_range(source: str, start: int, end: int) -> List[str]:
 
 def add_context_tokens(
         tokens: List[str], filename: str, kind: str,
-        language: str = "python") -> List[str]:
+        language: str = "python",
+        structural_names: List[str] | None = None) -> List[str]:
     """Add filename and source-kind tokens to a chunk token list."""
     result = list(tokens)
     seen = set(result)
@@ -61,6 +62,11 @@ def add_context_tokens(
         context.append("class")
     elif kind == "function":
         context.append("function")
+    elif kind == "module":
+        context.append("module")
+    if structural_names is not None:
+        for name in structural_names:
+            context.extend(tokenize_text(name))
     for token in context:
         if token not in seen:
             result.append(token)

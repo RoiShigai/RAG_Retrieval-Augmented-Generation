@@ -60,8 +60,15 @@ class PythonChunker(FileChunker):
 
         self.__tokenizer = PythonTokenizer()
         self.__tokenizer.tokenize_file(source, offset)
+        module_nodes: List[ast.stmt] = []
         for node in tree.body:
             if isinstance(node, ast.ClassDef):
+                chunks.extend(
+                    self.__chunk_module_statements(
+                        path, source, offset, module_nodes
+                    )
+                )
+                module_nodes = []
                 chunks.extend(
                     self.__chunk_class(
                         path, source, node, offset, None
@@ -69,10 +76,50 @@ class PythonChunker(FileChunker):
                 )
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 chunks.extend(
+                    self.__chunk_module_statements(
+                        path, source, offset, module_nodes
+                    )
+                )
+                module_nodes = []
+                chunks.extend(
                     self.__chunk_function(
                         path, source, node, offset, None
                     )
                 )
+            else:
+                module_nodes.append(node)
+        chunks.extend(
+            self.__chunk_module_statements(path, source, offset, module_nodes)
+        )
+        return chunks
+
+    def __chunk_module_statements(
+            self,
+            path: Path,
+            source: str,
+            offset: List[int],
+            nodes: List[ast.stmt]) -> List[Chunk]:
+        """Chunk consecutive top-level statements as module content."""
+        chunks: List[Chunk] = []
+        if not nodes:
+            return chunks
+        current_start, current_end = self.__node_range(offset, nodes[0])
+        for node in nodes[1:]:
+            _, statement_end = self.__node_range(offset, node)
+            if self.__fits_character_limit(
+                    source, current_start, statement_end):
+                current_end = statement_end
+                continue
+            chunks.extend(self.__range_chunks(
+                path, source, current_start, current_end,
+                ChunkType.PYTHON_MODULE, None
+            ))
+            current_start = self.__node_range(offset, node)[0]
+            current_end = statement_end
+        chunks.extend(self.__range_chunks(
+            path, source, current_start, current_end,
+            ChunkType.PYTHON_MODULE, None
+        ))
         return chunks
 
     def __chunk_function(
@@ -96,7 +143,8 @@ class PythonChunker(FileChunker):
                     start=start,
                     end=end,
                     tokens=add_context_tokens(
-                        tokens, path.name, "function"
+                        tokens, path.name, "function",
+                        structural_names=[node.name]
                     ),
                     chunk_type=ChunkType.PYTHON_FUNCTION,
                     parent_id=parent_id
@@ -118,7 +166,7 @@ class PythonChunker(FileChunker):
             start, end = self.__node_range(offset, node)
             return self.__range_chunks(
                 path, source, start, end,
-                ChunkType.PYTHON_FUNCTION, parent_id
+                ChunkType.PYTHON_FUNCTION, parent_id, [node.name]
             )
         current_start = None
         current_end = None
@@ -141,7 +189,8 @@ class PythonChunker(FileChunker):
                 chunks.extend(
                     self.__range_chunks(
                         path, source, current_start, current_end,
-                        ChunkType.PYTHON_FUNCTION, parent_id
+                        ChunkType.PYTHON_FUNCTION, parent_id,
+                        [node.name]
                     )
                 )
                 current_start = statement_start
@@ -151,7 +200,8 @@ class PythonChunker(FileChunker):
             chunks.extend(
                 self.__range_chunks(
                     path, source, current_start, current_end,
-                    ChunkType.PYTHON_FUNCTION, parent_id
+                    ChunkType.PYTHON_FUNCTION, parent_id,
+                    [node.name]
                 )
             )
         return chunks
@@ -177,7 +227,8 @@ class PythonChunker(FileChunker):
                     start=start,
                     end=end,
                     tokens=add_context_tokens(
-                        tokens, file_path.name, "class"
+                        tokens, file_path.name, "class",
+                        structural_names=[node.name]
                     ),
                     chunk_type=ChunkType.PYTHON_CLASS,
                     parent_id=parent_id
@@ -202,6 +253,7 @@ class PythonChunker(FileChunker):
         chunks: List[Chunk] = []
         current_start: int | None = None
         current_end: int | None = None
+        current_names: List[str] = []
 
         for child in node.body:
             child_start, child_end = self.__node_range(
@@ -211,10 +263,12 @@ class PythonChunker(FileChunker):
             if current_start is None:
                 current_start = child_start
                 current_end = child_end
+                current_names = [node.name, *self.__node_names(child)]
                 continue
             if self.__fits_character_limit(
                     source, current_start, child_end):
                 current_end = child_end
+                current_names.extend(self.__node_names(child))
                 continue
 
             if current_end is None:
@@ -222,17 +276,20 @@ class PythonChunker(FileChunker):
             chunks.extend(
                 self.__range_chunks(
                     path, source, current_start, current_end,
-                    ChunkType.PYTHON_CLASS_PART, parent_id
+                    ChunkType.PYTHON_CLASS_PART, parent_id,
+                    current_names
                 )
             )
             current_start = child_start
             current_end = child_end
+            current_names = [node.name, *self.__node_names(child)]
 
         if current_start is not None and current_end is not None:
             chunks.extend(
                 self.__range_chunks(
                     path, source, current_start, current_end,
-                    ChunkType.PYTHON_CLASS_PART, parent_id
+                    ChunkType.PYTHON_CLASS_PART, parent_id,
+                    current_names
                 )
             )
         return chunks
@@ -259,8 +316,10 @@ class PythonChunker(FileChunker):
             start: int,
             end: int,
             chunk_type: ChunkType,
-            parent_id: int | None) -> List[Chunk]:
+            parent_id: int | None,
+            structural_names: List[str] | None = None) -> List[Chunk]:
         """Create one chunk, falling back to source lines when necessary."""
+        kind = self.__chunk_kind(chunk_type)
         if self.__fits_character_limit(source, start, end):
             return [Chunk(
                 id=self.__id_generator.next(),
@@ -270,18 +329,14 @@ class PythonChunker(FileChunker):
                 tokens=add_context_tokens(
                     self.__tokenizer.tokens_for_range(start, end),
                     path.name,
-                    "class" if chunk_type == ChunkType.PYTHON_CLASS_PART
-                    else "function",
+                    kind,
+                    structural_names=structural_names,
                 ),
                 chunk_type=chunk_type,
                 parent_id=parent_id
             )]
 
         chunks: List[Chunk] = []
-        kind = (
-            "class" if chunk_type == ChunkType.PYTHON_CLASS_PART
-            else "function"
-        )
         for chunk_start, chunk_end in split_source_ranges(
                 source, start, end, self.__max_chunk_size):
             chunks.append(Chunk(
@@ -295,11 +350,27 @@ class PythonChunker(FileChunker):
                     ),
                     path.name,
                     kind,
+                    structural_names=structural_names,
                 ),
                 chunk_type=chunk_type,
                 parent_id=parent_id
             ))
         return chunks
+
+    def __chunk_kind(self, chunk_type: ChunkType) -> str:
+        """Return the context kind for a Python chunk type."""
+        if chunk_type == ChunkType.PYTHON_CLASS_PART:
+            return "class"
+        if chunk_type == ChunkType.PYTHON_MODULE:
+            return "module"
+        return "function"
+
+    def __node_names(self, node: ast.stmt) -> List[str]:
+        """Return structural names carried by a statement."""
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                             ast.ClassDef)):
+            return [node.name]
+        return []
 
     def __statement_children(
         self,
