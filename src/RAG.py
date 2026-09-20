@@ -74,7 +74,9 @@ class RAG:
             k: int) -> list[MinimalSource]:
         """Return source locations matching the query."""
         database_version = self.__database.get_database_version()
+        print(f"database version: {time.perf_counter() - self.start}")
         cached = self.__cache.get_search_result(query, k, database_version)
+        print(f"cache query: {time.perf_counter() - self.start}")
         if cached is not None:
             return cached
         matches = self.__bm25.search(tokenize_text(query), k)
@@ -93,6 +95,7 @@ class RAG:
         self.__cache.store_search_result(
             query, k, database_version, sources
         )
+        print(f"cache storing: {time.perf_counter() - self.start}")
         return sources
 
     def search_dataset(
