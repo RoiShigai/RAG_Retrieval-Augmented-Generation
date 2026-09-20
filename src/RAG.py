@@ -120,9 +120,14 @@ class RAG:
         """
         sources: List[MinimalSource] = []
         answers: List[MinimalSearchResults] = []
+        print("BITE")
+        dataset_file = load_json_file(dataset_path)
+        print(dataset_file)
         dataset: List[UnansweredQuestion] = [
-                UnansweredQuestion.model_construct(question=q["question"])
-                for q in load_json_file(dataset_path)
+                UnansweredQuestion.model_construct(
+                    question=q["question"], question_id=q["question_id"]
+                    )
+                for q in dataset_file["rag_questions"]
             ]
         print(f"data set construct: {time.perf_counter() - self.start}")
 
