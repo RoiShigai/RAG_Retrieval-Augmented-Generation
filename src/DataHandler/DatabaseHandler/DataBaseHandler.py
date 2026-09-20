@@ -25,7 +25,8 @@ class DataBaseHandler:
             Parameters:
                 database: path to the database it will interact with
         """
-        self.__db = sqlite3.connect(str(database))
+        self.__database_path = database.resolve()
+        self.__db = sqlite3.connect(str(self.__database_path))
         self.__db.execute("PRAGMA foreign_keys = ON")
         self.__pending_hashes: dict[str, str] = {}
         self.__create_tables()
@@ -71,9 +72,17 @@ class DataBaseHandler:
                 total_chunks INTEGER NOT NULL CHECK (total_chunks >= 0),
                 total_token_lengths INTEGER NOT NULL DEFAULT 0
             );
+            CREATE TABLE IF NOT EXISTS database_metadata (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                version INTEGER NOT NULL CHECK (version >= 0)
+            );
             CREATE INDEX IF NOT EXISTS idx_chunk_tokens_token
                 ON chunk_tokens(token);
             """
+        )
+        self.__db.execute(
+            "INSERT OR IGNORE INTO database_metadata(id, version) "
+            "VALUES (1, 0)"
         )
         self.__db.commit()
         self.__migrate_schema()
@@ -288,6 +297,19 @@ class DataBaseHandler:
                 "total_token_lengths) VALUES (1, ?, ?)",
                 (total_chunks, self.__total_token_lengths()),
             )
+            self.__increment_database_version()
+
+    def get_database_version(self) -> str:
+        """Return the current version of the indexed database."""
+        row = self.__db.execute(
+            "SELECT version FROM database_metadata WHERE id = 1"
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("Database version metadata is missing")
+        database_id = hashlib.sha256(
+            str(self.__database_path).encode("utf-8")
+        ).hexdigest()
+        return f"{SCHEMA_VERSION}:{database_id}:{row[0]}"
 
     def get_bm25_postings(
             self, tokens: Iterable[str]
@@ -335,6 +357,7 @@ class DataBaseHandler:
                 )
             if deleted:
                 self.__refresh_bm25_metadata()
+                self.__increment_database_version()
 
         for path in actual_paths:
             if self.check_file_modified(path):
@@ -360,6 +383,12 @@ class DataBaseHandler:
             "INSERT INTO index_metadata(id, total_chunks, "
             "total_token_lengths) VALUES (1, ?, ?)",
             (total_chunks, self.__total_token_lengths()),
+        )
+
+    def __increment_database_version(self) -> None:
+        """Increment the persisted indexed-data generation."""
+        self.__db.execute(
+            "UPDATE database_metadata SET version = version + 1 WHERE id = 1"
         )
 
     def refresh_bm25_metadata(self) -> None:
@@ -459,6 +488,7 @@ class DataBaseHandler:
                 "frequency) VALUES (?, ?, ?, ?)",
                 token_rows,
             )
+            self.__increment_database_version()
 
     def close(self) -> None:
         """Close the SQLite connection."""

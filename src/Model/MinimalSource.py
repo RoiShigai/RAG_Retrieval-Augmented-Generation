@@ -1,5 +1,4 @@
 from pydantic import BaseModel
-from locale import str
 
 
 class MinimalSource(BaseModel):

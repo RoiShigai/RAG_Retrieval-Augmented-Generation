@@ -9,7 +9,6 @@ def load_json_file(file: Path) -> dict:
     """ Open, read and return the content of a JSON file """
     with open(file, "r", encoding="utf-8") as f:
         content = json.load(f)
-    print(content)
     return content
 
 
@@ -21,5 +20,6 @@ def create_json_file(
             store the inputed content
     """
     data = {model.question_id: model.model_dump() for model in content}
+    final: dict = {"anwers": data}
     with open(file_path, "w+") as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
+        json.dump(final, f, indent=4, ensure_ascii=False)

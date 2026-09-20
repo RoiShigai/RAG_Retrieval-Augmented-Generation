@@ -125,7 +125,7 @@ def test_schema_contains_three_tables(tmp_path: Path) -> None:
     }
     assert tables == {
         "files", "chunks", "chunk_tokens", "token_stats",
-        "index_metadata",
+        "index_metadata", "database_metadata",
     }
     connection.close()
     database.close()

@@ -1,9 +1,12 @@
 from Indexor.Indexor import Indexor
 from Algorithm import DatabaseBM25Index
 from DataHandler.DatabaseHandler.DataBaseHandler import DataBaseHandler
+from DataHandler import CacheHandler
 from pathlib import Path
 from typing import List
-from Model import MinimalSource, MinimalSearchResults, MinimalAnswer, UnansweredQuestion
+from Model import (
+    MinimalSource, MinimalSearchResults, MinimalAnswer, UnansweredQuestion,
+)
 from Indexor.Chunker.Tokenizer.TokenNormalizer import tokenize_text
 from Helper import load_json_file
 from SLM import SLM
@@ -31,13 +34,16 @@ class RAG:
             self,
             database: Path,
             corpus: Path = Path("vllm-0.10.1"),
+            cache_directory: Path = Path("data/cache"),
             ) -> None:
         """ Init Method of the RAG Main Class """
+        self.start = time.perf_counter()
         self.__corpus = corpus.resolve()
         if not self.__corpus.is_dir():
             raise NotADirectoryError(self.__corpus)
         self.__database = DataBaseHandler(database)
         self.__bm25 = DatabaseBM25Index(self.__database)
+        self.__cache = CacheHandler(cache_directory)
         self.__model = None
 
     def index(
@@ -67,17 +73,26 @@ class RAG:
             query: str,
             k: int) -> list[MinimalSource]:
         """Return source locations matching the query."""
+        database_version = self.__database.get_database_version()
+        cached = self.__cache.get_search_result(query, k, database_version)
+        if cached is not None:
+            return cached
         matches = self.__bm25.search(tokenize_text(query), k)
+        print(f"BM25 matches: {time.perf_counter() - self.start}")
         sources: list[MinimalSource] = []
         for chunk_key, _score in matches:
             if not isinstance(chunk_key, tuple):
                 continue
             chunk = self.__database.get_chunk(*chunk_key)
+            print(f"load chunk: {time.perf_counter() - self.start}")
             sources.append(MinimalSource.model_construct(
                 file_path=str(chunk.file_path),
                 first_character_index=chunk.start,
                 last_character_index=chunk.end,
             ))
+        self.__cache.store_search_result(
+            query, k, database_version, sources
+        )
         return sources
 
     def search_dataset(
@@ -103,12 +118,14 @@ class RAG:
         sources: List[MinimalSource] = []
         answers: List[MinimalSearchResults] = []
         dataset: List[UnansweredQuestion] = [
-                UnansweredQuestion.model_construct(question = q["question"])
+                UnansweredQuestion.model_construct(question=q["question"])
                 for q in load_json_file(dataset_path)
             ]
+        print(f"data set construct: {time.perf_counter() - self.start}")
 
         for question in dataset:
             sources = self.search(question.question, k)
+            print(f"question: {time.perf_counter() - self.start}")
             answers.append(
                     MinimalSearchResults.model_construct(
                         question_id=question.question_id,
@@ -122,14 +139,21 @@ class RAG:
     def answer(
             self,
             query: str,
-            k: int = TOP_K) -> None:
+            k: int = TOP_K) -> MinimalAnswer:
         """
             Generate an Answer to a User Query with SLM using
                 the contest retrieved for this question.
         """
+        database_version = self.__database.get_database_version()
+        cached = self.__cache.get_answer(query, k, database_version)
+        if cached is not None:
+            print(cached.answer)
+            return cached
         search_result = self.search(query, k)
         answer = self.__generate_answer(search_result, query)
-        print(answer)
+        self.__cache.store_answer(query, k, database_version, answer)
+        print(answer.answer)
+        return answer
 
     def answer_dataset(
             self,
@@ -140,7 +164,8 @@ class RAG:
                 store the response in a given directory
 
             Parameters:
-                student_search_results_path: str | path to the questions dataset
+                student_search_results_path: str | path to the questions
+                    dataset
                 save_directory: str | path to the directory
         """
         ...
@@ -176,5 +201,10 @@ class RAG:
         """
         if self.__model is None:
             self.__model = SLM(Small_LLM_Model())
-        answer = self.__model.generate_response(search_result, query)
-        return answer
+        generated_answer = self.__model.generate_response(search_result, query)
+        return MinimalAnswer.model_construct(
+            question_id=query,
+            question=query,
+            retrieved_sources=search_result,
+            answer=generated_answer,
+        )

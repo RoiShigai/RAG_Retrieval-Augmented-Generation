@@ -454,4 +454,5 @@ test.py
 output
 rag_env
 data/processed
+data/cache
 AGENTS.md
