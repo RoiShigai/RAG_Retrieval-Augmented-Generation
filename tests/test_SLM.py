@@ -22,12 +22,19 @@ class FakeModel:
         }
         return torch.tensor([marker_ids.get(text, [1])])
 
-    def get_logits_from_input_ids(self, input_ids: List[int]) -> List[float]:
-        token = self.next_tokens[self.calls]
-        self.calls += 1
-        logits = [-1.0] * 100
-        logits[token] = 1.0
-        return logits
+    def generate(
+            self,
+            prompt_ids: torch.Tensor,
+            max_new_tokens: int,
+            stop_sequences: List[List[int]]) -> List[int]:
+        generated: List[int] = []
+        for token in self.next_tokens[:max_new_tokens]:
+            self.calls += 1
+            generated.append(token)
+            for sequence in stop_sequences:
+                if sequence and generated[-len(sequence):] == sequence:
+                    return generated[:-len(sequence)]
+        return generated
 
     def decode(self, ids: List[int]) -> str:
         return "answer: " + ",".join(str(token) for token in ids)

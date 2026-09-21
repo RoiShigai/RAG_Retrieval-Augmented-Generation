@@ -1,7 +1,5 @@
 from typing import List, cast
 
-import torch
-
 from Helper import retrieve_text_from_source
 from llm_sdk import Small_LLM_Model
 from Model import MinimalSource
@@ -61,31 +59,14 @@ class SLM:
         return self.__generate(prompt)
 
     def __generate(self, prompt: str) -> str:
-        """Generate tokens greedily until a stop marker or token limit."""
-        input_ids: List[int] = cast(
-            List[int], self.__model.encode(prompt).tolist()[0]
+        """Generate and decode an answer using cached model inference."""
+        prompt_ids = self.__model.encode(prompt)
+        generated_ids = self.__model.generate(
+            prompt_ids,
+            self.__max_token,
+            self.__stop_sequences,
         )
-        generated_ids: List[int] = []
-
-        for _ in range(self.__max_token):
-            logits = self.__model.get_logits_from_input_ids(input_ids)
-            next_token: int = int(torch.argmax(torch.tensor(logits)).item())
-            generated_ids.append(next_token)
-            input_ids.append(next_token)
-            stop_length = self.__stop_sequence_length(generated_ids)
-            print(input_ids)
-            if stop_length:
-                generated_ids = generated_ids[:-stop_length]
-                break
-
-        return cast(str, self.__model.decode(generated_ids))
-
-    def __stop_sequence_length(self, generated_ids: List[int]) -> int:
-        """Return the length of a matching generated stop sequence."""
-        for sequence in self.__stop_sequences:
-            if sequence and generated_ids[-len(sequence):] == sequence:
-                return len(sequence)
-        return 0
+        return self.__model.decode(generated_ids)
 
     def __build_prompt(self, query: str, sources: List[MinimalSource]) -> str:
         """Build a direct-answer prompt from the retrieved sources."""
