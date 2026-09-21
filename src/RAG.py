@@ -183,8 +183,9 @@ class RAG:
                     MinimalSearchResults.model_validate(r)
                     for r in data["search_results"]
                   ]
-        for s in search:
-            answer.append(self.__generate_answer(s))
+        for i in range(10):
+            print(f"question {i}")
+            answer.append(self.__generate_answer(search[i]))
         create_json_file(save_directory, answer)
 
 
