@@ -8,7 +8,7 @@ from Model import (
     MinimalSource, MinimalSearchResults, MinimalAnswer, UnansweredQuestion,
 )
 from Indexor.Chunker.Tokenizer.TokenNormalizer import tokenize_text
-from Helper import load_json_file
+from Helper import load_json_file, create_json_file
 from SLM import SLM
 from llm_sdk import Small_LLM_Model
 import time
@@ -103,7 +103,7 @@ class RAG:
             dataset_path: Path,
             k: int,
             save_directory: Path = Path("data/dataset")
-            ) -> List[MinimalSearchResults]:
+            ) -> None:
         """
             Read a given dataset containing User request and
                 search the top K chunks to answers each request and
@@ -120,7 +120,6 @@ class RAG:
         """
         sources: List[MinimalSource] = []
         answers: List[MinimalSearchResults] = []
-        print("BITE")
         dataset_file = load_json_file(dataset_path)
         print(dataset_file)
         dataset: List[UnansweredQuestion] = [
@@ -176,7 +175,18 @@ class RAG:
                     dataset
                 save_directory: str | path to the directory
         """
-        ...
+        data: dict = load_json_file(Path(student_search_results_path))
+        answer: List[MinimalAnswer] = []
+        if not data:
+            return None
+        search = [
+                    MinimalSearchResults.model_validate(r)
+                    for r in data["search_results"]
+                  ]
+        for s in search:
+            answer.append(self.__generate_answer(s))
+        create_json_file(save_directory, answer)
+
 
     def evaluate(
             self,
@@ -201,18 +211,21 @@ class RAG:
 
     def __generate_answer(
             self,
-            search_result: List[MinimalSource],
-            query: str) -> MinimalAnswer:
+            search_result: List[MinimalSearchResults]
+            ) -> MinimalAnswer:
         """
             Generate a MinimalAnswer Object with the retrieved Source
                 for a given query
         """
         if self.__model is None:
             self.__model = SLM(Small_LLM_Model())
-        generated_answer = self.__model.generate_response(search_result, query)
+        generated_answer = self.__model.generate_response(
+                search_result.retrieved_sources,
+                search_result.question
+                )
         return MinimalAnswer.model_construct(
-            question_id=query,
-            question=query,
-            retrieved_sources=search_result,
+            question_id=search_result.question_id,
+            question=search_result.question,
+            retrieved_sources=search_result.retrieved_sources,
             answer=generated_answer,
         )

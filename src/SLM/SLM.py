@@ -73,6 +73,7 @@ class SLM:
             generated_ids.append(next_token)
             input_ids.append(next_token)
             stop_length = self.__stop_sequence_length(generated_ids)
+            print(input_ids)
             if stop_length:
                 generated_ids = generated_ids[:-stop_length]
                 break

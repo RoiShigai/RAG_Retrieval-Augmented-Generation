@@ -2,7 +2,6 @@ from pathlib import Path
 from pydantic import BaseModel
 from typing import List
 import json
-import os
 
 
 def load_json_file(file: Path) -> dict:
@@ -24,3 +23,4 @@ def create_json_file(
     final: dict = {"search_results": data, "k": 10}
     with open(file_path, "w+") as f:
         json.dump(final, f, indent=4, ensure_ascii=False)
+    print(f"content save in {file_path}")

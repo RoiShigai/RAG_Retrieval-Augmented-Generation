@@ -1,38 +1,40 @@
-[
-	{
-		"question": "How to setup Vllm?",
-		"question_id": "q1"
-	},
-	{
-		"question": "How to use multiple model ?",
-		"question_id": "q2"
-	},
-	{
-		"question": "How to configure the server ?",
-		"question_id": "q3"
-	},
-	{
-		"question": "How to contribute to Vllm project ?",
-		"question_id": "q4"
-	},
-	{
-		"question": "Which version of Cuda needs to be used to run a Vllm project ?",
-		"question_id": "q5"
-	},
-	{
-		"question": "How many model can be run on an OpenAI server ?",
-		"question_id": "q6"
-	},
-	{
-		"question": "What is the minimal specs needed to run a OpenAI server ?",
-		"question_id": "q7"
-	},
-	{
-		"question": "How to run the test suit of Vllm ?",
-		"question_id": "q8"
-	},
-	{
-		"question": "What is the longest test in the corpus ?",
-		"question_id": "q9"
-	}
-]
+{
+	"rag_questions": [
+		{
+			"question": "How to setup Vllm?",
+			"question_id": "q1"
+		},
+		{
+			"question": "How to use multiple model ?",
+			"question_id": "q2"
+		},
+		{
+			"question": "How to configure the server ?",
+			"question_id": "q3"
+		},
+		{
+			"question": "How to contribute to Vllm project ?",
+			"question_id": "q4"
+		},
+		{
+			"question": "Which version of Cuda needs to be used to run a Vllm project ?",
+			"question_id": "q5"
+		},
+		{
+			"question": "How many model can be run on an OpenAI server ?",
+			"question_id": "q6"
+		},
+		{
+			"question": "What is the minimal specs needed to run a OpenAI server ?",
+			"question_id": "q7"
+		},
+		{
+			"question": "How to run the test suit of Vllm ?",
+			"question_id": "q8"
+		},
+		{
+			"question": "What is the longest test in the corpus ?",
+			"question_id": "q9"
+		}
+	]
+}
