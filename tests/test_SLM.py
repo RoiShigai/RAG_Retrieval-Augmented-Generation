@@ -2,6 +2,7 @@ from typing import List
 
 import torch
 
+from src.SLM.AnswerBatch import AnswerBatch, BatchQuestion
 from src.SLM.SLM import SLM
 
 
@@ -26,8 +27,11 @@ class FakeModel:
             self,
             prompt_ids: torch.Tensor,
             max_new_tokens: int,
-            stop_sequences: List[List[int]]) -> List[int]:
+            past_key_values: object = None,
+            stop_sequences: List[List[int]] | None = None) -> List[int]:
         generated: List[int] = []
+        if stop_sequences is None:
+            stop_sequences = []
         for token in self.next_tokens[:max_new_tokens]:
             self.calls += 1
             generated.append(token)
@@ -38,6 +42,26 @@ class FakeModel:
 
     def decode(self, ids: List[int]) -> str:
         return "answer: " + ",".join(str(token) for token in ids)
+
+
+class FakeBatchModel(FakeModel):
+    """Record cached-context batch calls and return raw answers."""
+
+    def __init__(self) -> None:
+        super().__init__([])
+        self.batch_calls: List[tuple[List[str], dict[str, str], int]] = []
+
+    def generate_batch(
+            self,
+            prompts: List[str],
+            questions: dict[str, str],
+            max_new_tokens: int,
+            ) -> dict[str, str]:
+        self.batch_calls.append((prompts, questions, max_new_tokens))
+        return {
+            question_id: f"answer for {question_id}"
+            for question_id in questions
+        }
 
 
 def test_slm_uses_direct_answer_prompt_and_stop_marker() -> None:
@@ -61,3 +85,40 @@ def test_slm_respects_configured_token_limit() -> None:
 
     assert answer == "answer: 10,11,12"
     assert model.calls == 3
+
+
+def test_slm_batches_questions_over_one_cached_context() -> None:
+    model = FakeBatchModel()
+    slm = SLM(model, max_token=7)  # type: ignore[arg-type]
+    batch = AnswerBatch(
+        chunks=[],
+        questions=[
+            BatchQuestion(
+                question_id="q1",
+                question="What is one?",
+                source_ids=[],
+            ),
+            BatchQuestion(
+                question_id="q2",
+                question="What is two?",
+                source_ids=[],
+            ),
+        ],
+    )
+
+    answers = slm.generate_batch(batch)
+
+    assert len(model.batch_calls) == 1
+    context_prompts, question_prompts, max_tokens = model.batch_calls[0]
+    assert len(context_prompts) == 1
+    assert "What is one?" not in context_prompts[0]
+    assert "What is two?" not in context_prompts[0]
+    assert "JSON" not in context_prompts[0]
+    assert set(question_prompts) == {"q1", "q2"}
+    assert "What is one?" in question_prompts["q1"]
+    assert "What is two?" in question_prompts["q2"]
+    assert max_tokens == 7
+    assert [(answer.question_id, answer.answer) for answer in answers] == [
+        ("q1", "answer for q1"),
+        ("q2", "answer for q2"),
+    ]

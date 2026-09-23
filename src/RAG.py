@@ -8,7 +8,10 @@ from Model import (
     MinimalSource, MinimalSearchResults, MinimalAnswer, UnansweredQuestion,
 )
 from Indexor.Chunker.Tokenizer.TokenNormalizer import tokenize_text
-from Helper import load_json_file, create_json_file
+from Helper import (
+    create_answer_json_file,
+    load_json_file,
+)
 from SLM import SLM
 from llm_sdk import Small_LLM_Model
 import time
@@ -157,7 +160,12 @@ class RAG:
             print(cached.answer)
             return cached
         search_result = self.search(query, k)
-        answer = self.__generate_answer(search_result, query)
+        search = MinimalSearchResults.model_construct(
+            question_id="",
+            question=query,
+            retrieved_sources=search_result,
+        )
+        answer = self.__generate_answer(search)
         self.__cache.store_answer(query, k, database_version, answer)
         print(answer.answer)
         return answer
@@ -176,18 +184,43 @@ class RAG:
                 save_directory: str | path to the directory
         """
         data: dict = load_json_file(Path(student_search_results_path))
-        answer: List[MinimalAnswer] = []
         if not data:
             return None
         search = [
-                    MinimalSearchResults.model_validate(r)
-                    for r in data["search_results"]
-                  ]
-        for i in range(10):
-            print(f"question {i}")
-            answer.append(self.__generate_answer(search[i]))
-        create_json_file(save_directory, answer)
+            MinimalSearchResults.model_validate(result)
+            for result in data["search_results"]
+        ]
+        output_path = self.__answer_output_path(Path(save_directory))
+        partial_path = output_path.with_name(
+            f"{output_path.stem}.partial{output_path.suffix}"
+        )
+        answers_by_id = self.__load_partial_answers(partial_path)
 
+        if self.__model is None:
+            self.__model = SLM(Small_LLM_Model())
+
+        builder = self.__model.build_batch_builder()
+        remaining = [
+            result for result in search
+            if result.question_id not in answers_by_id
+        ]
+
+        for batch in builder.build_batches(remaining):
+            for answer in self.__model.generate_batch(batch):
+                answers_by_id[answer.question_id] = answer
+            ordered = [
+                answers_by_id[result.question_id]
+                for result in search
+                if result.question_id in answers_by_id
+            ]
+            print(ordered)
+            create_answer_json_file(
+                partial_path, ordered, data.get("k", TOP_K)
+            )
+        answers = [answers_by_id[result.question_id] for result in search]
+        create_answer_json_file(output_path, answers, data.get("k", TOP_K))
+        if partial_path.exists():
+            partial_path.unlink()
 
     def evaluate(
             self,
@@ -230,3 +263,27 @@ class RAG:
             retrieved_sources=search_result.retrieved_sources,
             answer=generated_answer,
         )
+
+    @staticmethod
+    def __answer_output_path(path: Path) -> Path:
+        """Resolve an answer file path from a file or output directory."""
+        if path.suffix.lower() == ".json":
+            return path
+        return path / "dataset_answer.json"
+
+    @staticmethod
+    def __load_partial_answers(path: Path) -> dict[str, MinimalAnswer]:
+        """Load valid checkpoint answers, ignoring an absent checkpoint."""
+        if not path.exists():
+            return {}
+        try:
+            data = load_json_file(path)
+            return {
+                answer.question_id: answer
+                for answer in (
+                    MinimalAnswer.model_validate(item)
+                    for item in data.get("answer_response", [])
+                )
+            }
+        except (OSError, KeyError, TypeError, ValueError):
+            return {}

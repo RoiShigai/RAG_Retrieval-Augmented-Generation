@@ -97,24 +97,27 @@ class Small_LLM_Model:
             self,
             prompt_ids: torch.Tensor,
             max_new_tokens: int,
-            stop_sequences: list[list[int]]) -> list[int]:
+            past_key_values: Any = None,
+            stop_sequences: list[list[int]] | None = None) -> list[int]:
         """Generate tokens with a cached key-value state."""
         if max_new_tokens <= 0:
             return []
+        if stop_sequences is None:
+            stop_sequences = []
 
         with torch.inference_mode():
             outputs = self._model(
                 input_ids=prompt_ids,
+                past_key_values=past_key_values,
                 use_cache=True,
             )
-            past_key_values: Any = outputs.past_key_values
+            cached_past_key_values: Any = outputs.past_key_values
             next_token = torch.argmax(outputs.logits[:, -1, :], dim=-1)
             generated_ids: list[int] = []
 
             for _ in range(max_new_tokens):
                 token_id = int(next_token.item())
                 generated_ids.append(token_id)
-                print(generated_ids)
                 stop_length = self._stop_sequence_length(
                     generated_ids, stop_sequences
                 )
@@ -124,13 +127,65 @@ class Small_LLM_Model:
 
                 outputs = self._model(
                     input_ids=next_token.unsqueeze(0),
-                    past_key_values=past_key_values,
+                    past_key_values=cached_past_key_values,
                     use_cache=True,
                 )
-                past_key_values = outputs.past_key_values
+                cached_past_key_values = outputs.past_key_values
                 next_token = torch.argmax(outputs.logits[:, -1, :], dim=-1)
 
         return generated_ids
+
+    def generate_batch(
+            self,
+            prompts: list[str],
+            questions: dict[str, str],
+            max_new_tokens: int,
+            ) -> dict[str, str]:
+        """Generate raw answers using one cached context prompt."""
+        answers: dict[str, str] = {}
+        if not prompts or not questions or max_new_tokens <= 0:
+            return answers
+        if len(prompts) != 1:
+            raise ValueError("generate_batch expects one shared context")
+        past_key_values = self.__cache_context(prompts)
+        stop_sequences = [
+                self._tokenizer.encode(seq, add_special_tokens=False)
+                for seq in ["<|im_end|>", "</s>", "<|endoftext|>"]
+            ]
+
+        for question_id, question in questions.items():
+            print(question)
+            question_ids = self._tokenizer(
+                    question,
+                    return_tensors="pt",
+                    add_special_tokens=False,
+                )["input_ids"].to(self._device)
+            answer_ids = self.generate(
+                    question_ids,
+                    max_new_tokens,
+                    past_key_values,
+                    stop_sequences
+                )
+            answers[question_id] = cast(
+                str,
+                self._tokenizer.decode(answer_ids, skip_special_tokens=True),
+            )
+
+        return answers
+
+    def __cache_context(self, context: list[str]):
+        """ Encode and Cache the context into the Model KV Cache """
+        context_id = self._tokenizer(
+            context,
+            return_tensors="pt",
+        )["input_ids"].to(self._device)
+
+        with torch.inference_mode():
+            outputs = self._model(
+                    input_ids=context_id,
+                    use_cache=True
+                    )
+        return outputs.past_key_values
 
     @staticmethod
     def _stop_sequence_length(
