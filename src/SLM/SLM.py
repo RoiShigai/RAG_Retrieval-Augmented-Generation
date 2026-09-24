@@ -11,7 +11,7 @@ from .AnswerBatch import (
 from Model import MinimalAnswer
 
 
-MAX_TOKEN: int = 128
+MAX_TOKEN: int = 64
 STOP_MARKERS: tuple[str, ...] = (
     "<|im_end|>",
     "</s>",
@@ -68,7 +68,7 @@ class SLM:
     def build_batch_builder(
             self,
             max_questions: int = 10,
-            max_char_length: int = 10000,
+            max_char_length: int = 8192,
             ) -> ContextBatchBuilder:
         """Return a context builder using rendered character limits."""
         return ContextBatchBuilder(
