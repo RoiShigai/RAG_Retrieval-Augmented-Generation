@@ -64,6 +64,7 @@ class Indexor:
             if path.suffix not in self.SUPPORTED_EXTENSION:
                 continue
 
+            print(f"processing: {path}")
             modified = self.__database.check_file_modified(path)
             metadata = self.__database.get_file_metadata(path)
             if modified:
